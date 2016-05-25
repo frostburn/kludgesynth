@@ -24,3 +24,8 @@ size_t ceil_div(size_t x, size_t y)
     }
     return 1 + ((x - 1) / y);
 }
+
+double frand()
+{
+    return 2.0 * (rand() / (double) RAND_MAX) - 1.0;
+}

@@ -1,12 +1,12 @@
+#include <assert.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
+
 #include <math.h>
 #include <portaudio.h>
-
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdlib.h>
-
-#include <pthread.h>
 
 // Compile with: gcc synth.c -pthread -lm -lportaudio -O3 -o synth
 // Injection is best xD
@@ -19,13 +19,14 @@
 #include "scale.c"
 #include "clock_fit.c"
 
-
 #define SAMPLE_RATE (44100)
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
 #define FRAMES_PER_BUFFER (128)
 
+#include "waveguide.c"
+
 #define NUM_VOICES (32)
-#define NUM_PROGRAMS (2)
+#define NUM_PROGRAMS (3)
 
 typedef struct
 {
@@ -47,9 +48,12 @@ static double on_times[NUM_VOICES];
 static double off_velocities[NUM_VOICES];
 static double off_times[NUM_VOICES];
 
+static kp_state karps[NUM_VOICES];
+
 static int program = 0;
 
-void init_voices() {
+void init_voices()
+{
     for (int i = 0; i < NUM_VOICES; i++) {
         phases[i] = A_LOT;
         freqs[i] = 0;
@@ -57,10 +61,14 @@ void init_voices() {
         off_velocities[i] = 0;
         on_times[i] = -A_LOT;
         off_times[i] = -A_LOT;
+
+        karps[i].num_samples = 0;
+        karps[i].samples = NULL;
     }
 }
 
-int find_voice_index() {
+int find_voice_index()
+{
     double off_min = INFINITY;
     int index = 0;
     for (int i = 0; i < NUM_VOICES; i++) {
@@ -72,13 +80,44 @@ int find_voice_index() {
     return index;
 }
 
+void handle_note_on(int index, double event_t, double freq, double velocity)
+{
+    on_times[index] = event_t;
+    phases[index] = 0;
+    freqs[index] = freq;
+    velocities[index] = velocity;
+
+    if (program == 2) {
+        kp_destroy(karps + index);
+        karps[index].b0 = 0.5;
+        karps[index].b1 = 0.5 - 4 / freq;
+        karps[index].x1 = 0;
+        kp_init(karps + index, freq);
+        for (int i = 0; i < karps[index].num_samples; i++) {
+            karps[index].samples[i] = frand() * sqrt(velocity);
+        }
+        for (int i = 0; i < 20 * karps[index].num_samples * (1 - velocity); i++) {
+            kp_step(karps + index, 1);
+        }
+    }
+
+    off_times[index] = A_LOT;
+    off_velocities[index] = 0;
+}
+
+void handle_note_off(int index, double event_t, double velocity)
+{
+    if (event_t < off_times[index]) {
+        off_times[index] = event_t;
+        off_velocities[index] = velocity;
+    }
+}
+
 #define MAX_EVENTS (128)
 #include "handle_joy.c"
 #include "handle_midi.c"
 
-
-
-static int patestCallback(
+static int paCallback(
     const void *inputBuffer, void *outputBuffer,
     unsigned long framesPerBuffer,
     const PaStreamCallbackTimeInfo* timeInfo,
@@ -138,6 +177,9 @@ static int patestCallback(
                 b *= d;
                 v = 0.4 * velocities[j] * tanh(sin(p + b * sin(p + 3 * t)) * a) / tanh(a) * d * tanh(t_on * (300 + 200 * velocities[j]));
             }
+            else if (program == 2) {
+                v += kp_step(karps + j, f_delta * SAMPLE_RATE);
+            }
             out_v += v;
 
             phases[j] += freqs[j] * f_delta;
@@ -186,7 +228,7 @@ int main(void)
         SAMPLE_RATE,
         FRAMES_PER_BUFFER,
         paNoFlag,
-        patestCallback,
+        paCallback,
         &data
     );
     if(err != paNoError) goto error;

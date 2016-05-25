@@ -30,6 +30,7 @@ int process_midi(void (process_midi_event)(const midi_event)) {
             exit(1);
         #endif
     }
+    // TODO: Read raw bytes one by one and deal with two byte events properly.
     for (int i = 0; i < ceil_div(num_bytes, sizeof(raw_midi_event)); i++) {
         unsigned char *data = ev[i].data;
         midi_event e = {data[0] & 0x0f, data[0] & 0xf0, data[1], data[2]};

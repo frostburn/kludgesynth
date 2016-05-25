@@ -59,12 +59,8 @@ void handle_joy_event(const joy_event e)
             }
             int index = find_voice_index();
             index_by_button[e.num] = index;
-            phases[index] = 0;
-            freqs[index] = mtof(major_pentatonic(e.num, joy_state.key_mod) + 60 + 12 * joy_state.octave + joy_state.transpose + joy_state.pitch_shift);
-            velocities[index] = joy_state.velocity;
-            on_times[index] = event_t;
-            off_times[index] = A_LOT;
-            off_velocities[index] = 0;
+            double freq = mtof(major_pentatonic(e.num, joy_state.key_mod) + 60 + 12 * joy_state.octave + joy_state.transpose + joy_state.pitch_shift);
+            handle_note_on(index, event_t, freq, joy_state.velocity);
         }
         else {
             if (e.num == 10) {
@@ -74,8 +70,7 @@ void handle_joy_event(const joy_event e)
             }
             int index = index_by_button[e.num];
             if (index >= 0) {
-                off_times[index] = event_t;
-                off_velocities[index] = 0.5;
+                handle_note_off(index, event_t, joy_state.velocity);
             }
         }
     }

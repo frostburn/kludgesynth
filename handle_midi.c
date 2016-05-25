@@ -56,23 +56,16 @@ void handle_midi_event(const midi_event e)
     if (e.type == NOTE_ON) {
         int index = index_by_pitch[e.pitch];
         if (index >= 0) {
-            off_times[index] = MIN(off_times[index], event_t);
-            off_velocities[index] = e.velocity / 127.0;
+            handle_note_off(index, event_t, e.velocity / 127.0);
         }
         index = find_voice_index();
         index_by_pitch[e.pitch] = index;
-        phases[index] = 0;
-        freqs[index] = mtof(e.pitch);
-        velocities[index] = e.velocity / 127.0;
-        on_times[index] = event_t;
-        off_times[index] = A_LOT;
-        off_velocities[index] = 0;
+        handle_note_on(index, event_t, mtof(e.pitch), e.velocity / 127.0);
     }
     else if (e.type == NOTE_OFF) {
         int index = index_by_pitch[e.pitch];
         if (index >= 0) {
-            off_times[index] = event_t;
-            off_velocities[index] = e.velocity / 127.0;
+            handle_note_off(index, event_t, e.velocity / 127.0);
         }
     }
     else if (e.type == CONTROL_CHANGE) {
@@ -81,8 +74,7 @@ void handle_midi_event(const midi_event e)
         }
         else if (e.pitch == ALL_NOTES_OFF || e.pitch == ALL_SOUND_OFF) {
             for (int i = 0; i < NUM_VOICES; i++) {
-                off_times[i] = -A_LOT;
-                off_velocities[i] = 0;
+                handle_note_off(i, event_t, 1);
             }
         }
     }
