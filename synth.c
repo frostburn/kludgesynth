@@ -18,6 +18,7 @@
 #include "linreg.c"
 #include "scale.c"
 #include "clock_fit.c"
+#include "waveform.c"
 
 #define SAMPLE_RATE (44100)
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
@@ -25,8 +26,10 @@
 
 #include "waveguide.c"
 #include "osc.c"
+#include "noise.c"
+#include "noisy.c"
 
-#define NUM_VOICES (32)
+#define NUM_VOICES (16)
 #define NUM_PROGRAMS (3)
 #define MAX_DECAY (5)
 
@@ -47,6 +50,8 @@ static double off_times[NUM_VOICES];
 
 static osc_state oscs[NUM_VOICES];
 static kp_state karps[NUM_VOICES];
+static snower_state snows[NUM_VOICES];
+static noisy_state noisys[NUM_VOICES];
 
 static int program = 0;
 
@@ -102,6 +107,18 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
             kp_step(karps + index, 1);
         }
     }
+    if (program == 3 || program == 4) {
+        snows[index].amplitude = velocity * 0.5;
+        snows[index].mul = 1.0;
+        snower_init(snows + index, freq);
+    }
+    if (program == 5) {
+        noisys[index].freq = freq;
+        noisys[index].velocity = velocity;
+        noisys[index].noisiness = 0.04;
+        noisys[index].noise_rate = 15 * SAMPDELTA;
+        noisy_init(noisys + index);
+    }
 }
 
 void handle_note_off(int index, double event_t, double velocity)
@@ -114,6 +131,9 @@ void handle_note_off(int index, double event_t, double velocity)
         }
         if (program == 2) {
             karps[index].b0 = 0.45;
+        }
+        if (program == 3 || program == 4) {
+            snows[index].mul = pow(0.004, SAMPDELTA);
         }
     }
 }
@@ -164,6 +184,22 @@ static int paCallback(
             }
             else if (program == 2) {
                 v = kp_step(karps + j, rate);
+            }
+            else if (program == 3) {
+                v = snower_step_0(snows + j, rate);
+            }
+            else if (program == 4) {
+                v = snower_step_1(snows + j, rate);
+            }
+            else if (program == 5) {
+                double wf(double phase) {
+                    double v = lissajous13(phase, param_a, param_b * 0.25);
+                    if (t_off >= 0) {
+                        v *= exp(-t_off * 10);
+                    }
+                    return v;
+                }
+                v = noisy_step(noisys + j, rate, wf);
             }
             out_v += v;
         }
@@ -220,6 +256,7 @@ int main(void)
     err = Pa_SetStreamFinishedCallback(stream, &StreamFinished);
     if(err != paNoError) goto error;
 
+    waveform_init();
     init_voices();
 
     if (open_joy(NULL)) {

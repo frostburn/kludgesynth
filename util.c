@@ -1,8 +1,22 @@
+#define EPSILON (1e-10)
 #define A_LOT (1e12)
 #define TWO_ROOT_TWELVE (1.0594630943592953)
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+#define CLIP(x, min, max) ((x) < (min)) ? (min) : (((x) > (max)) ? (max) : (x))
+
+double clip(double x, double min, double max)
+{
+    if (x < min) {
+        return min;
+    }
+    if (x > max) {
+        return max;
+    }
+    return x;
+}
 
 // Midi pitch to frequency
 double mtof(double pitch)

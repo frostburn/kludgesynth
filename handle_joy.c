@@ -1,4 +1,5 @@
 #define NUM_BUTTONS (32)
+#define NUM_SCALES (4)
 
 typedef struct joy_state_t
 {
@@ -12,6 +13,7 @@ typedef struct joy_state_t
     int key_mod;
     int octave;
     int transpose;
+    int scale;
 } joy_state_t;
 
 static pthread_t joy_thread;
@@ -53,13 +55,33 @@ void handle_joy_event(const joy_event e)
                 return;
             }
             else if (joy_state.program_mode) {
-                program = e.num;
-                printf("Selecting program %d\n", program);
+                if (e.num == 9) {
+                    joy_state.scale++;
+                    joy_state.scale %= NUM_SCALES;
+                    printf("Selecting scale %d\n", joy_state.scale);
+                }
+                else {
+                    program = e.num;
+                    printf("Selecting program %d\n", program);
+                }
                 return;
             }
             int index = find_voice_index();
             index_by_button[e.num] = index;
-            double freq = mtof(major_pentatonic(e.num, joy_state.key_mod) + 60 + 12 * joy_state.octave + joy_state.transpose + joy_state.pitch_shift);
+            int pitch;
+            if (joy_state.scale == 1) {
+                pitch = minor_pentatonic(e.num, joy_state.key_mod);
+            }
+            else if(joy_state.scale == 2) {
+                pitch = major_scale(e.num, joy_state.key_mod);
+            }
+            else if(joy_state.scale == 3) {
+                pitch = minor_scale(e.num, joy_state.key_mod);
+            }
+            else {
+                pitch = major_pentatonic(e.num, joy_state.key_mod);
+            }
+            double freq = mtof(pitch + 60 + 12 * joy_state.octave + joy_state.transpose + joy_state.pitch_shift);
             handle_note_on(index, event_t, freq, joy_state.velocity);
         }
         else {
@@ -77,10 +99,10 @@ void handle_joy_event(const joy_event e)
     else if (e.type == JOY_AXIS){
         if (!joy_state.program_mode) {
             if (e.num == 0) {
-                joy_state.pitch_bend = 1.0 * e.axis * JOY_AXIS_NORM;
+                joy_state.pitch_bend = e.axis * JOY_AXIS_NORM;
             }
             else if (e.num == 1) {
-                joy_state.modulation = 0.5 * e.axis * JOY_AXIS_NORM;
+                joy_state.modulation = e.axis * JOY_AXIS_NORM;
             }
             else if (e.num == 2) {
                 joy_state.param_a = 0.5 + 0.5 * e.axis * JOY_AXIS_NORM;

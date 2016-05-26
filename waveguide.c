@@ -50,7 +50,7 @@ void kp_destroy(kp_state *kp)
 
 double kp_step(kp_state *kp, double rate)
 {
-    kp->mu += kp->rate + rate - 1;
+    kp->mu += kp->rate * rate;
     while (kp->mu >= 1) {
         kp->z0 = kp->x1;
         kp->z1 = _kp_step(kp);
