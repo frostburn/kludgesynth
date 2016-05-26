@@ -24,9 +24,11 @@
 #define FRAMES_PER_BUFFER (128)
 
 #include "waveguide.c"
+#include "osc.c"
 
 #define NUM_VOICES (32)
 #define NUM_PROGRAMS (3)
+#define MAX_DECAY (5)
 
 typedef struct
 {
@@ -40,14 +42,10 @@ static double t = 0;
 static double last_t = 0;
 static double next_t = 0;
 
-static int voice_index = 0;
-static double phases[NUM_VOICES];
-static double freqs[NUM_VOICES];
-static double velocities[NUM_VOICES];
 static double on_times[NUM_VOICES];
-static double off_velocities[NUM_VOICES];
 static double off_times[NUM_VOICES];
 
+static osc_state oscs[NUM_VOICES];
 static kp_state karps[NUM_VOICES];
 
 static int program = 0;
@@ -55,12 +53,13 @@ static int program = 0;
 void init_voices()
 {
     for (int i = 0; i < NUM_VOICES; i++) {
-        phases[i] = A_LOT;
-        freqs[i] = 0;
-        velocities[i] = 0;
-        off_velocities[i] = 0;
         on_times[i] = -A_LOT;
         off_times[i] = -A_LOT;
+
+        oscs[i].phase = A_LOT;
+        oscs[i].freq = 0;
+        oscs[i].velocity = 0;
+        oscs[i].off_velocity = 0;
 
         karps[i].num_samples = 0;
         karps[i].samples = NULL;
@@ -83,10 +82,13 @@ int find_voice_index()
 void handle_note_on(int index, double event_t, double freq, double velocity)
 {
     on_times[index] = event_t;
-    phases[index] = 0;
-    freqs[index] = freq;
-    velocities[index] = velocity;
+    off_times[index] = A_LOT;
 
+    if (program == 0 || program == 1) {
+        oscs[index].phase = 0;
+        oscs[index].freq = freq;
+        oscs[index].velocity = velocity;
+    }
     if (program == 2) {
         kp_destroy(karps + index);
         karps[index].b0 = 0.5;
@@ -100,16 +102,19 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
             kp_step(karps + index, 1);
         }
     }
-
-    off_times[index] = A_LOT;
-    off_velocities[index] = 0;
 }
 
 void handle_note_off(int index, double event_t, double velocity)
 {
     if (event_t < off_times[index]) {
         off_times[index] = event_t;
-        off_velocities[index] = velocity;
+
+        if (program == 0 || program == 1) {
+            oscs[index].off_velocity = velocity;
+        }
+        if (program == 2) {
+            karps[index].b0 = 0.45;
+        }
     }
 }
 
@@ -140,49 +145,27 @@ static int paCallback(
         double modulation = joy_state.modulation + midi_state.modulation;
         double param_a = joy_state.param_a;
         double param_b = joy_state.param_b;
-        double f_delta = itor(pitch_bend + sin(2 * M_PI * 7 * t) * modulation) * SAMPDELTA;
+        double rate = itor(pitch_bend + 0.7 * sin(2 * M_PI * 6 * t) * modulation);
         out_v = 0;
         for (int j = 0; j < NUM_VOICES; j++) {
             double t_on = t - on_times[j];
             double t_off = t - off_times[j];
-            if (t_off > 4 || t_on < 0) {
+            if (t_off > MAX_DECAY || t_on < 0) {
                 continue;
             }
-            double p = phases[j] * 2 * M_PI;
             double v = 0;
             if (program == 0) {
-                v = 0.4 * velocities[j] * sin(
-                    p +
-                    sin(p * 5) * (0.1 + 0.3 * velocities[j]) +
-                    0.1 * sin(p) +
-                    0.8 * param_a * sin(p * 3) +
-                    1.0 * param_b * sin(p * 2)
-                ) * exp(-t_on * 0.02) * tanh(t_on * 200);
-                if (t_off >= 0) {
-                    v *= exp(-t_off * 10);
-                }
+                v = bowed_marimba(oscs[j], t, t_on, t_off, param_a, param_b);
+                osc_step(oscs + j, rate);
             }
             else if (program == 1) {
-                double a = 0.01 + 2 * param_a;
-                double b = param_b;
-                double t_eff;
-                if (t_off < 0) {
-                    t_eff = t_on * 4;
-                }
-                else {
-                    t_eff = (t_on - t_off) * 4 + t_off * 2;
-                }
-                double d = exp(-t_eff);
-                a *= d;
-                b *= d;
-                v = 0.4 * velocities[j] * tanh(sin(p + b * sin(p + 3 * t)) * a) / tanh(a) * d * tanh(t_on * (300 + 200 * velocities[j]));
+                v = soft_ping(oscs[j], t, t_on, t_off, param_a, param_b);
+                osc_step(oscs + j, rate);
             }
             else if (program == 2) {
-                v += kp_step(karps + j, f_delta * SAMPLE_RATE);
+                v = kp_step(karps + j, rate);
             }
             out_v += v;
-
-            phases[j] += freqs[j] * f_delta;
         }
 
         t += SAMPDELTA;

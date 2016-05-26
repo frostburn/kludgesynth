@@ -18,7 +18,9 @@ void kp_init(kp_state *kp, double freq)
     kp->z1 = kp->z0;
 
     kp->num_samples = (int) (SAMPLE_RATE / freq);
-    kp->rate = kp->num_samples * freq * SAMPDELTA;
+    double filter_delay = fabs(kp->b1);  // Not really, but good enough.
+    double effective_inverse_freq = (kp->num_samples + filter_delay) * SAMPDELTA;
+    kp->rate = freq * effective_inverse_freq;
 
     kp->samples = malloc(kp->num_samples * sizeof(double));
     assert(kp->samples);
@@ -46,9 +48,9 @@ void kp_destroy(kp_state *kp)
     kp->index = -1;
 }
 
-double kp_step(kp_state *kp, double r)
+double kp_step(kp_state *kp, double rate)
 {
-    kp->mu += kp->rate + r - 1;
+    kp->mu += kp->rate + rate - 1;
     while (kp->mu >= 1) {
         kp->z0 = kp->x1;
         kp->z1 = _kp_step(kp);

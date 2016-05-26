@@ -97,18 +97,24 @@ void handle_joy_event(const joy_event e)
             }
         }
         if (e.num == 6) {
+            int delta = MAX(-1, MIN(1, e.axis));
             if (joy_state.program_mode) {
-                joy_state.transpose += MAX(-1, MIN(1, e.axis));
-                printf("Transpose %d\n", joy_state.transpose);
+                if (delta) {
+                    joy_state.transpose += delta;
+                    printf("Transpose %d\n", joy_state.transpose);
+                }
             }
             else {
                 joy_state.key_mod = MAX(-1, MIN(1, e.axis));
             }
         }
         else if (e.num == 7) {
+            int delta = MAX(-1, MIN(1, e.axis));
             if (joy_state.program_mode) {
-                joy_state.octave -= MAX(-1, MIN(1, e.axis));
-                printf("Octave %d\n", joy_state.octave);
+                if (delta) {
+                    joy_state.octave -= delta;
+                    printf("Octave %d\n", joy_state.octave);
+                }
             }
         }
     }
