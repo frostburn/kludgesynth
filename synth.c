@@ -28,6 +28,7 @@
 #include "osc.c"
 #include "noise.c"
 #include "noisy.c"
+#include "additive.c"
 
 #define NUM_VOICES (16)
 #define NUM_PROGRAMS (3)
@@ -52,6 +53,7 @@ static osc_state oscs[NUM_VOICES];
 static kp_state karps[NUM_VOICES];
 static snower_state snows[NUM_VOICES];
 static noisy_state noisys[NUM_VOICES];
+static pingsum_state pingsums[NUM_VOICES];
 
 static int program = 0;
 
@@ -68,6 +70,9 @@ void init_voices()
 
         karps[i].num_samples = 0;
         karps[i].samples = NULL;
+
+        pingsums[i].num_voices = 0;
+        pingsums[i].pings = NULL;
     }
 }
 
@@ -118,6 +123,15 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
         noisys[index].noisiness = 0.04;
         noisys[index].noise_rate = 15 * SAMPDELTA;
         noisy_init(noisys + index);
+    }
+    if (program == 6) {
+        pingsum_destroy(pingsums + index);
+        pingsum_init(pingsums + index, 100);
+        for (int i = 0; i < pingsums[index].num_voices; i++) {
+            double k = i + 1;
+            double e = 1.5 + log(freq) * 0.1;
+            sineping_init(pingsums[index].pings + i, frand() * 0.1, freq * (pow(k, 0.6) + (0.2 + 0.03 * frand()) * i), 0.2 * velocity / (pow(k, e) + 0.1 * frand()), 0.01);
+        }
     }
 }
 
@@ -200,6 +214,9 @@ static int paCallback(
                     return v;
                 }
                 v = noisy_step(noisys + j, rate, wf);
+            }
+            else if (program == 6) {
+                v = pingsum_step(pingsums + j, rate) * tanh(t_on * 150);
             }
             out_v += v;
         }
