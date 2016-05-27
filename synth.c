@@ -20,6 +20,7 @@
 #include "clock_fit.c"
 #include "waveform.c"
 #include "interpolation.c"
+#include "filter.c"
 
 #define SAMPLE_RATE (44100)
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
@@ -48,6 +49,11 @@ static PaStream *stream;
 static double t = 0;
 static double last_t = 0;
 static double next_t = 0;
+
+static double last_pitch_bend = 0;
+static double last_modulation = 0;
+static double last_param_a = 0;
+static double last_param_b = 0;
 
 static double on_times[NUM_VOICES];
 static double off_times[NUM_VOICES];
@@ -104,7 +110,7 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
     on_times[index] = event_t;
     off_times[index] = A_LOT;
 
-    if (program == 0 || program == 1) {
+    if (program == 0 || program == 1 || program == 8) {
         oscs[index].phase = 0;
         oscs[index].freq = freq;
         oscs[index].velocity = velocity;
@@ -162,7 +168,7 @@ void handle_note_off(int index, double event_t, double velocity)
     if (event_t < off_times[index]) {
         off_times[index] = event_t;
 
-        if (program == 0 || program == 1) {
+        if (program == 0 || program == 1 || program == 8) {
             oscs[index].off_velocity = velocity;
         }
         if (program == 2) {
@@ -201,6 +207,12 @@ static int paCallback(
         double modulation = joy_state.modulation + midi_state.modulation;
         double param_a = joy_state.param_a;
         double param_b = joy_state.param_b;
+
+        last_pitch_bend = pitch_bend = 0.5 * (last_pitch_bend + pitch_bend);
+        last_modulation = modulation = 0.5 * (last_modulation + modulation);
+        last_param_a = param_a = 0.5 * (last_param_a + param_a);
+        last_param_b = param_b = 0.5 * (last_param_b + param_b);
+
         double rate = itor(pitch_bend + 0.7 * sin(2 * M_PI * 6 * t) * modulation);
         out_v = 0;
         for (int j = 0; j < NUM_VOICES; j++) {
@@ -241,10 +253,14 @@ static int paCallback(
                 v = pingsum_step(pingsums + j, rate) * tanh(t_on * 150);
             }
             else if (program == 7) {
-                v = pad_step_linear(pads + j, rate, 0.85 + 0.15 * param_a) * tanh(t_on * 10) * (1 - 0.4 * param_a);
+                v = pad_step_linear(pads + j, rate, 0.8 + 0.15 * param_a) * tanh(t_on * 10) * (1 - 0.4 * param_a);
                 if (t_off >= 0) {
                     v *= exp(-t_off * 4);
                 }
+            }
+            else if (program == 8) {
+                v = softsaw_bass(oscs[j], t, t_on, t_off, param_a, param_b);
+                osc_step(oscs + j, rate);
             }
             out_v += v;
         }
