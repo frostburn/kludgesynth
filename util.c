@@ -62,6 +62,11 @@ double frand()
     return 2.0 * (rand() / (double) RAND_MAX) - 1.0;
 }
 
+double uniform()
+{
+    return rand() / (double) RAND_MAX;
+}
+
 #ifndef MAIN
 int main()
 {

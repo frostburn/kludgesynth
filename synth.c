@@ -19,6 +19,7 @@
 #include "scale.c"
 #include "clock_fit.c"
 #include "waveform.c"
+#include "interpolation.c"
 
 #define SAMPLE_RATE (44100)
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
@@ -29,6 +30,8 @@
 #include "noise.c"
 #include "noisy.c"
 #include "additive.c"
+
+#include "instrument.c"
 
 #define NUM_VOICES (16)
 #define NUM_PROGRAMS (3)
@@ -54,6 +57,7 @@ static kp_state karps[NUM_VOICES];
 static snower_state snows[NUM_VOICES];
 static noisy_state noisys[NUM_VOICES];
 static pingsum_state pingsums[NUM_VOICES];
+static pad_state pads[NUM_VOICES];
 
 static int program = 0;
 
@@ -73,6 +77,12 @@ void init_voices()
 
         pingsums[i].num_voices = 0;
         pingsums[i].pings = NULL;
+
+        pads[i].snows = NULL;
+        pads[i].base_amplitudes = NULL;
+        pads[i].amplitudes = NULL;
+        pads[i].rates = NULL;
+        pads[i].coefs = NULL;
     }
 }
 
@@ -120,8 +130,8 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
     if (program == 5) {
         noisys[index].freq = freq;
         noisys[index].velocity = velocity;
-        noisys[index].noisiness = 0.04;
-        noisys[index].noise_rate = 15 * SAMPDELTA;
+        noisys[index].noisiness = 0.15 * pow(freq, 0.7);
+        noisys[index].noise_rate = (5 + rtoi(freq)) * SAMPDELTA;
         noisy_init(noisys + index);
     }
     if (program == 6) {
@@ -130,7 +140,19 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
         for (int i = 0; i < pingsums[index].num_voices; i++) {
             double k = i + 1;
             double e = 1.5 + log(freq) * 0.1;
-            sineping_init(pingsums[index].pings + i, frand() * 0.1, freq * (pow(k, 0.6) + (0.2 + 0.03 * frand()) * i), 0.2 * velocity / (pow(k, e) + 0.1 * frand()), 0.01);
+            sineping_init(pingsums[index].pings + i, frand() * 0.1, freq * (pow(k, 0.6) + (0.2 + 0.03 * frand()) * i), 0.3 * velocity / (pow(k, e) + 0.1 * frand()), 0.01);
+        }
+    }
+    if (program == 7) {
+        pad_destroy(pads + index);
+        pad_init(pads + index, 50);
+        pads[index].phase = 0;
+        pads[index].freq = freq;
+        for (int i = 0; i < pads[index].num_voices; i++) {
+            pads[index].base_amplitudes[i] = 0.1 * velocity / (i * i * i + 1);
+            pads[index].amplitudes[i] = (0.2 + 0.3 * (i % 2)) * velocity * pow(i + 1, -0.7);
+            pads[index].rates[i] = SAMPDELTA * (1 + 0.2 * i);
+            pads[index].snows[i].mu = uniform();
         }
     }
 }
@@ -217,6 +239,12 @@ static int paCallback(
             }
             else if (program == 6) {
                 v = pingsum_step(pingsums + j, rate) * tanh(t_on * 150);
+            }
+            else if (program == 7) {
+                v = pad_step_linear(pads + j, rate, 0.85 + 0.15 * param_a) * tanh(t_on * 10) * (1 - 0.4 * param_a);
+                if (t_off >= 0) {
+                    v *= exp(-t_off * 4);
+                }
             }
             out_v += v;
         }

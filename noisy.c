@@ -23,7 +23,7 @@ double noisy_step(noisy_state *n, double rate, double waveform(double))
     double v = 0;
     for (int i = 0; i < NUM_SUB_VOICES; i++) {
         snow_step(n->snows + i, n->noise_rate);
-        n->phases[i] += SAMPDELTA * n->freq * (rate + snow_linear(n->snows[i]) * n->noisiness);
+        n->phases[i] += SAMPDELTA * (n->freq * rate + snow_linear(n->snows[i]) * n->noisiness);
         v += waveform(n->phases[i]);
     }
     return v * n->velocity * 0.1;

@@ -110,6 +110,25 @@ double cosine_sum(double phase, int num_coefs, double *coefs)
     return cosine_sum_unsafe(phase, num_coefs, coefs);
 }
 
+double cis_sum_real(double phase, double sharpness, int num_coefs, double *coefs)
+{
+    phase *= 2 * M_PI;
+    double x = cos(phase) * sharpness;
+    double y = sin(phase) * sharpness;
+    double result_x = coefs[num_coefs - 1];
+    double result_y = 0;
+    for (int i = num_coefs - 2; 1; i--) {
+        phase = result_x;
+        result_x = result_x * x - result_y * y;
+        result_x += coefs[i];
+        if (i <= 0) {
+            return result_x;
+        }
+        result_y = phase * y + result_y * x;
+    }
+    return result_x;
+}
+
 #ifndef MAIN
 int main()
 {
