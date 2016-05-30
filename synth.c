@@ -37,7 +37,7 @@
 #include "instrument.c"
 
 #define NUM_VOICES (16)
-#define NUM_PROGRAMS (11)
+#define NUM_PROGRAMS (12)
 #define MAX_DECAY (5)
 
 typedef struct
@@ -67,6 +67,7 @@ static noisy_state noisys[NUM_VOICES];
 static pingsum_state pingsums[NUM_VOICES];
 static pad_state pads[NUM_VOICES];
 static blsaw_state blsaws[NUM_VOICES];
+static pipe_state pipes[NUM_VOICES];
 
 static int program = 0;
 
@@ -92,6 +93,12 @@ void init_voices()
         pads[i].amplitudes = NULL;
         pads[i].rates = NULL;
         pads[i].coefs = NULL;
+
+        blsaw_init(blsaws + i, 20.0);
+        blsaws[i].velocity = 0;
+
+        pipes[i].buffer.num_samples = 0;
+        pipes[i].buffer.samples = NULL;
     }
 }
 
@@ -105,7 +112,10 @@ int find_voice_index()
             index = i;
         }
     }
-    return index;
+    if (off_min < t) {
+        return index;
+    }
+    return -1;
 }
 
 void handle_note_on(int index, double event_t, double freq, double velocity)
@@ -171,6 +181,11 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
     if (program == 10) {
         blsaw_init(blsaws + index, 2 * freq);
         blsaws[index].velocity = velocity;
+    }
+    if (program == 11) {
+        pipe_destroy(pipes + index);
+        pipe_init(pipes + index, freq);
+        pipes[index].velocity = velocity;
     }
 }
 
@@ -275,13 +290,14 @@ static int paCallback(
                 osc_step(oscs + j, rate);
             }
             else if (program == 9 || program == 10) {
-                if (t_off < 0) {
-                    double shift = param_b + 1;
-                    if (program == 10) {
-                        shift -= 0.5;
-                    }
-                    v = blsaw_step(blsaws + j, rate, param_a * 0.2, shift);
+                double shift = param_b + 1;
+                if (program == 10) {
+                    shift -= 0.5;
                 }
+                v = blsaw_step(blsaws + j, rate, t_on, t_off, param_a * 0.2, shift);
+            }
+            else if (program == 11) {
+                v = pipe_step(pipes + j, rate, t_off);
             }
             out_v += v;
         }

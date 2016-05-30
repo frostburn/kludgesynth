@@ -19,6 +19,14 @@ typedef struct blsaw_state
     polezero_state polezero;
 } blsaw_state;
 
+typedef struct pipe_state
+{
+    double velocity;
+    double rate;
+    double mu;
+    buffer_state buffer;
+} pipe_state;
+
 void pad_init(pad_state *p, int num_voices)
 {
     p->num_voices = num_voices;
@@ -68,10 +76,51 @@ void blsaw_init(blsaw_state *blsaw, double freq)
     polezero_integrator(&blsaw->polezero, freq, 0.95);
 }
 
-double blsaw_step(blsaw_state *blsaw, double rate, double softness, double shift)
+double blsaw_step(blsaw_state *blsaw, double rate, double t_on, double t_off, double softness, double shift)
 {
-    complex double z = cexp(2 * M_PI * I * blsaw->shift_phase + softness);
+    if (t_off > 0.1) {
+        return 0;
+    }
+    if (t_off < 0) {
+        t_off = 0;
+    }
+    complex double z = cexp(2 * M_PI * I * blsaw->shift_phase + 1.5 * softness - 500 * t_off) * tanh(500 * t_on);
     double v = polezero_step(&blsaw->polezero, cimag(blit_step(&blsaw->blit, rate, softness) * z) * blsaw->velocity);
     blsaw->shift_phase += blsaw->blit.freq * rate * shift * SAMPDELTA;
     return v;
+}
+
+void pipe_init(pipe_state *p, double freq)
+{
+    freq *= 2;
+    int num_samples = (int) (SAMPLE_RATE / freq);
+    buffer_init(&p->buffer, num_samples);
+    double effective_inverse_freq = (num_samples - 0.2) * SAMPDELTA;
+    p->rate = freq * effective_inverse_freq;
+    p->mu = 0;
+}
+
+void pipe_destroy(pipe_state *p)
+{
+    buffer_destroy(&p->buffer);
+}
+
+double pipe_step(pipe_state *p, double rate, double t_off)
+{
+    if (!p->buffer.samples) {
+        return 0;
+    }
+    p->mu += p->rate * rate;
+    while (p->mu >= 1) {
+        double exitation = 0;
+        if (t_off < 0) {
+            exitation = frand() * 0.03 * p->velocity;
+        }
+        double y = exitation - 0.499 * (buffer_delay(p->buffer, p->buffer.num_samples) + buffer_delay(p->buffer, p->buffer.num_samples - 1));
+        buffer_step(&p->buffer, y);
+        p->mu -= 1;
+    }
+    double z0 = buffer_delay(p->buffer, 1);
+    double z1 = buffer_delay(p->buffer, 2);
+    return z0 + p->mu * (z1 - z0);
 }

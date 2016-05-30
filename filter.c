@@ -52,6 +52,13 @@ typedef struct filter_state
     cpole_state cpole;
 } filter_state;
 
+typedef struct buffer_state
+{
+    int num_samples;
+    int index;
+    double *samples;
+} buffer_state;
+
 typedef struct convolver_state {
     int num_samples;
     int index;
@@ -205,6 +212,42 @@ void filter_apf(filter_state *filter, double freq, double decay)
     filter->twozero.b0 = (r * r + i * i) * m;
     filter->twozero.b2 = m;
     filter->twozero.b1 = 2 * r * m;
+}
+
+void buffer_init(buffer_state *b, int num_samples)
+{
+    b->num_samples = num_samples;
+    b->index = 0;
+    b->samples = calloc(num_samples, sizeof(double));
+    assert(b->samples);
+}
+
+void buffer_destroy(buffer_state *b)
+{
+    free(b->samples);
+}
+
+void buffer_step(buffer_state *b, double sample)
+{
+    if (b->samples) {
+        b->samples[b->index++] = sample;
+        if (b->index >= b->num_samples) {
+            b->index = 0;
+        }
+    }
+}
+
+double buffer_delay(const buffer_state b, int delay)
+{
+    #ifdef DEBUG
+        assert(delay >= 0);
+        assert(delay <= b.num_samples);
+    #endif
+    int index = b.index - delay;
+    if (index < 0) {
+        index += b.num_samples;
+    }
+    return b.samples[index];
 }
 
 void convolver_init(convolver_state *c, int num_samples)
