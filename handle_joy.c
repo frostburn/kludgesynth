@@ -51,6 +51,7 @@ void handle_joy_event(const joy_event e)
         if (e.axis) {
             if (e.num == 10) {
                 printf("Program mode on\n");
+                printf(" Pitch bend = %g\n Modulation = %g\n Param A = %g\n Param B = %g\n ", joy_state.pitch_bend, joy_state.modulation, joy_state.param_a, joy_state.param_b);
                 joy_state.program_mode = 1;
                 return;
             }
@@ -60,8 +61,14 @@ void handle_joy_event(const joy_event e)
                     joy_state.scale %= NUM_SCALES;
                     printf("Selecting scale %d\n", joy_state.scale);
                 }
-                else {
-                    program = e.num;
+                else if (e.num == 4 || e.num == 5) {
+                    program += e.num == 4 ? -1 : 1;
+                    if (program < 0) {
+                        program += NUM_PROGRAMS;
+                    }
+                    else if (program >= NUM_PROGRAMS) {
+                        program -= NUM_PROGRAMS;
+                    }
                     printf("Selecting program %d\n", program);
                 }
                 return;

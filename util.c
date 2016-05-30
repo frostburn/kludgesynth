@@ -49,6 +49,16 @@ double rtoi(double ratio)
     return log(ratio) * I_LOG_TWO_ROOT_TWELVE;
 }
 
+double tritave_itor(double interval)
+{
+    return pow(3.0, interval / 19.0);
+}
+
+double bohlen_pierce_itor(double interval)
+{
+    return pow(3.0, interval / 13.0);
+}
+
 size_t ceil_div(size_t x, size_t y)
 {
     if (x == 0) {

@@ -10,6 +10,15 @@ typedef struct pad_state
     double *coefs;
 } pad_state;
 
+typedef struct blsaw_state
+{
+    double velocity;
+    double off_velocity;
+    double shift_phase;
+    blit_state blit;
+    polezero_state polezero;
+} blsaw_state;
+
 void pad_init(pad_state *p, int num_voices)
 {
     p->num_voices = num_voices;
@@ -48,4 +57,21 @@ double pad_step_linear(pad_state *p, double rate, double sharpness)
     }
     p->phase += SAMPDELTA * p->freq * rate;
     return cis_sum_real(p->phase, sharpness, p->num_voices, p->coefs);
+}
+
+void blsaw_init(blsaw_state *blsaw, double freq)
+{
+    blsaw->shift_phase = 0;
+    blsaw->blit.phase = 0;
+    blsaw->blit.freq = freq;
+    polezero_reset(&blsaw->polezero);
+    polezero_integrator(&blsaw->polezero, freq, 0.95);
+}
+
+double blsaw_step(blsaw_state *blsaw, double rate, double softness, double shift)
+{
+    complex double z = cexp(2 * M_PI * I * blsaw->shift_phase + softness);
+    double v = polezero_step(&blsaw->polezero, cimag(blit_step(&blsaw->blit, rate, softness) * z) * blsaw->velocity);
+    blsaw->shift_phase += blsaw->blit.freq * rate * shift * SAMPDELTA;
+    return v;
 }

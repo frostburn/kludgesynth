@@ -17,6 +17,14 @@ typedef struct twozero_state {
     double b2;
 } twozero_state;
 
+typedef struct polezero_state {
+    double x1;
+    double y1;
+    double b0;
+    double b1;
+    double a1;
+} polezero_state;
+
 typedef struct biquad_state
 {
     double x1;
@@ -66,6 +74,30 @@ double twozero_step(twozero_state *t, double sample)
     t->x2 = t->x1;
     t->x1 = sample;
     return y0;
+}
+
+void polezero_reset(polezero_state *p)
+{
+    p->x1 = 0;
+    p->y1 = 0;
+    p->b0 = 0;
+    p->b1 = 0;
+    p->a1 = 0;
+}
+
+double polezero_step(polezero_state *p, double sample)
+{
+    double y0 = p->b0 * sample + p->b1 * p->x1 - p->a1 * p->y1;
+    p->x1 = sample;
+    p->y1 = y0;
+    return y0;
+}
+
+void polezero_integrator(polezero_state *p, double gain, double leak_constant)
+{
+    p->b0 = 0.5 * gain * SAMPDELTA;
+    p->b1 = 0.5 * gain * SAMPDELTA;
+    p->a1 = -leak_constant;
 }
 
 void biquad_reset(biquad_state *b)

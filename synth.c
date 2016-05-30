@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <complex.h>
 #include <math.h>
 #include <portaudio.h>
 
@@ -20,22 +21,23 @@
 #include "clock_fit.c"
 #include "waveform.c"
 #include "interpolation.c"
-#include "filter.c"
 
 #define SAMPLE_RATE (44100)
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
 #define FRAMES_PER_BUFFER (128)
 
+#include "filter.c"
 #include "waveguide.c"
 #include "osc.c"
 #include "noise.c"
 #include "noisy.c"
 #include "additive.c"
+#include "blit.c"
 
 #include "instrument.c"
 
 #define NUM_VOICES (16)
-#define NUM_PROGRAMS (3)
+#define NUM_PROGRAMS (11)
 #define MAX_DECAY (5)
 
 typedef struct
@@ -64,6 +66,7 @@ static snower_state snows[NUM_VOICES];
 static noisy_state noisys[NUM_VOICES];
 static pingsum_state pingsums[NUM_VOICES];
 static pad_state pads[NUM_VOICES];
+static blsaw_state blsaws[NUM_VOICES];
 
 static int program = 0;
 
@@ -161,6 +164,14 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
             pads[index].snows[i].mu = uniform();
         }
     }
+    if (program == 9) {
+        blsaw_init(blsaws + index, freq);
+        blsaws[index].velocity = velocity;
+    }
+    if (program == 10) {
+        blsaw_init(blsaws + index, 2 * freq);
+        blsaws[index].velocity = velocity;
+    }
 }
 
 void handle_note_off(int index, double event_t, double velocity)
@@ -198,6 +209,7 @@ static int paCallback(
     (void) timeInfo; /* Prevent unused variable warnings. */
     (void) statusFlags;
     (void) inputBuffer;
+    (void) data;
 
     last_t = t;
     next_t = t + framesPerBuffer * SAMPDELTA;
@@ -262,6 +274,15 @@ static int paCallback(
                 v = softsaw_bass(oscs[j], t, t_on, t_off, param_a, param_b);
                 osc_step(oscs + j, rate);
             }
+            else if (program == 9 || program == 10) {
+                if (t_off < 0) {
+                    double shift = param_b + 1;
+                    if (program == 10) {
+                        shift -= 0.5;
+                    }
+                    v = blsaw_step(blsaws + j, rate, param_a * 0.2, shift);
+                }
+            }
             out_v += v;
         }
 
@@ -284,7 +305,6 @@ int main(void)
     PaStreamParameters outputParameters;
     PaError err;
     paUserData data;
-    int i;
 
     printf("PortAudio synth. SR = %d, BufSize = %d\n", SAMPLE_RATE, FRAMES_PER_BUFFER);
 
