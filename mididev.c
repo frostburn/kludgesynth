@@ -13,7 +13,7 @@ typedef struct midi_event
     unsigned char velocity;
 } midi_event;
 
-static int  midi_fd;
+static int midi_fd;
 
 void print_midi_event(const midi_event e) {
     printf("midi_event(\n  channel=%d\n  type=%d\n  pitch=%d\n  velocity=%d\n)\n", e.channel, e.type, e.pitch, e.velocity);
@@ -61,4 +61,9 @@ int init_midi(char *filename) {
     #endif
 
     return 1;
+}
+
+void close_midi()
+{
+    close(midi_fd);
 }

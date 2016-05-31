@@ -16,6 +16,7 @@
 #include "util.c"
 #include "joydev.c"
 #include "mididev.c"
+#include "mousedev.c"
 #include "linreg.c"
 #include "scale.c"
 #include "clock_fit.c"
@@ -206,9 +207,50 @@ void handle_note_off(int index, double event_t, double velocity)
     }
 }
 
+static int mono_active = 0;
+static double mono_phase = 0;
+
+void handle_mouse_click(int num, double event_t);
+
+void handle_mouse_release(int num, double event_t)
+{
+    if (num == 4) {
+        mono_active = 0;
+    }
+}
+
 #define MAX_EVENTS (128)
 #include "handle_joy.c"
 #include "handle_midi.c"
+#include "handle_mouse.c"
+
+void handle_mouse_click(int num, double event_t)
+{
+    if (num == 6) {
+        mouse_state.x = 0;
+        mouse_state.y = 0;
+        mouse_state.wheel = 0;
+        printf("Mouse reset\n");
+    }
+    if (num == 4) {
+        mono_active = 1;
+    }
+    else {
+        printf("Clicked button %d at %g.\n", num, event_t);
+    }
+}
+
+double process_mono(double rate)
+{
+    double freq = mtof(mouse_state.x * 0.05 + 60) * rate;
+    mono_phase += freq * SAMPDELTA;
+    return sine(
+        mono_phase +
+        sine(mono_phase) * last_param_a * 0.3 +
+        sine(0.5 * mono_phase) * (0.1 + last_param_b * 0.2)
+    ) * (0.3 + 0.3 * tanh(-mouse_state.y * 0.02)) *
+        (1 - 0.1 * last_param_a - 0.1 * last_param_b);
+}
 
 static int paCallback(
     const void *inputBuffer, void *outputBuffer,
@@ -235,10 +277,15 @@ static int paCallback(
         double param_a = joy_state.param_a;
         double param_b = joy_state.param_b;
 
-        last_pitch_bend = pitch_bend = 0.5 * (last_pitch_bend + pitch_bend);
-        last_modulation = modulation = 0.5 * (last_modulation + modulation);
-        last_param_a = param_a = 0.5 * (last_param_a + param_a);
-        last_param_b = param_b = 0.5 * (last_param_b + param_b);
+        if (!mono_active) {
+            param_a += mouse_state.x * 0.01;
+            param_b -= mouse_state.y * 0.01;
+        }
+
+        last_pitch_bend = pitch_bend = 0.9 * last_pitch_bend + 0.1 * pitch_bend;
+        last_modulation = modulation = 0.9 * last_modulation + 0.1 * modulation;
+        last_param_a = param_a = 0.9 * last_param_a + 0.1 * param_a;
+        last_param_b = param_b = 0.9 * last_param_b + 0.1 * param_b;
 
         double rate = itor(pitch_bend + 0.7 * sin(2 * M_PI * 6 * t) * modulation);
         out_v = 0;
@@ -300,6 +347,9 @@ static int paCallback(
                 v = pipe_step(pipes + j, rate, t_off);
             }
             out_v += v;
+        }
+        if (mono_active) {
+            out_v += process_mono(rate);
         }
 
         t += SAMPDELTA;
@@ -373,6 +423,13 @@ int main(void)
         printf("Midi disabled.\n");
     }
 
+    if (init_mouse(NULL)) {
+        launch_mouse();
+    }
+    else {
+        printf("Mouse disabled.\n");
+    }
+
     err = Pa_StartStream(stream);
     if(err != paNoError) goto error;
 
@@ -387,6 +444,10 @@ int main(void)
     if(err != paNoError) goto error;
 
     Pa_Terminate();
+
+    close_joy();
+    close_midi();
+
     printf("K thx bye!\n");
 
     return err;

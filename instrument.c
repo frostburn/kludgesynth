@@ -56,6 +56,7 @@ void pad_destroy(pad_state *p) {
 
 double pad_step_linear(pad_state *p, double rate, double sharpness)
 {
+    sharpness = tanh(sharpness);
     if (!p->num_voices) {
         return 0;
     }
@@ -83,6 +84,9 @@ double blsaw_step(blsaw_state *blsaw, double rate, double t_on, double t_off, do
     }
     if (t_off < 0) {
         t_off = 0;
+    }
+    if (softness < 0) {
+        softness = 0;
     }
     complex double z = cexp(2 * M_PI * I * blsaw->shift_phase + 1.5 * softness - 500 * t_off) * tanh(500 * t_on);
     double v = polezero_step(&blsaw->polezero, cimag(blit_step(&blsaw->blit, rate, softness) * z) * blsaw->velocity);

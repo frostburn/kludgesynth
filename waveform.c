@@ -41,7 +41,7 @@ double lissajous12(double phase, double sharpness, double bias)
 double lissajous13(double phase, double sharpness, double bias)
 {
     sharpness = clip(sharpness, -1, 1);
-    bias = clip(bias, EPSILON - 1, 1 - EPSILON);
+    bias = clip(bias, -0.5, 0.5);
     double x = phase - floor(phase + 0.5);
     return atan2((1 + sharpness) * sine(1.5 * x), (1 - sharpness) * cosine(0.5 * x + bias / 3.0)) * 2.0 / M_PI + x + x;
 }
