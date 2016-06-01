@@ -27,6 +27,8 @@
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
 #define FRAMES_PER_BUFFER (128)
 
+#define RECORD_NUM_SAMPLES (SAMPLE_RATE * 60 * 10)
+
 #include "filter.c"
 #include "waveguide.c"
 #include "osc.c"
@@ -39,10 +41,14 @@
 
 #define NUM_VOICES (16)
 #define NUM_PROGRAMS (12)
+#define NUM_MONO_PROGRAMS (2)
 #define MAX_DECAY (5)
 
 typedef struct
 {
+    size_t record_num_samples;
+    size_t record_index;
+    double *record_samples;
     char message[20];
 }
 paUserData;
@@ -69,8 +75,17 @@ static pingsum_state pingsums[NUM_VOICES];
 static pad_state pads[NUM_VOICES];
 static blsaw_state blsaws[NUM_VOICES];
 static pipe_state pipes[NUM_VOICES];
+static voice_state voices[NUM_VOICES];
 
 static int program = 0;
+
+static double mono_on_time = -A_LOT;
+static double mono_off_time = -A_LOT;
+
+static osc_state mono_osc;
+static voice_state mono_voice;
+
+static int mono_program = 0;
 
 void init_voices()
 {
@@ -100,7 +115,17 @@ void init_voices()
 
         pipes[i].buffer.num_samples = 0;
         pipes[i].buffer.samples = NULL;
+
+        voice_init(voices + i);
     }
+    mono_osc.phase = 0;
+    mono_osc.freq = 1;
+    mono_osc.velocity = 0.5;
+    mono_osc.off_velocity = 0.5;
+
+    voice_init(&mono_voice);
+    mono_voice.blit.freq = 1;
+    mono_voice.velocity = 0.5;
 }
 
 int find_voice_index()
@@ -188,6 +213,10 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
         pipe_init(pipes + index, freq);
         pipes[index].velocity = velocity;
     }
+    if (program == 12) {
+        voices[index].blit.freq = freq;
+        voices[index].velocity = velocity;
+    }
 }
 
 void handle_note_off(int index, double event_t, double velocity)
@@ -207,15 +236,12 @@ void handle_note_off(int index, double event_t, double velocity)
     }
 }
 
-static int mono_active = 0;
-static double mono_phase = 0;
-
 void handle_mouse_click(int num, double event_t);
 
 void handle_mouse_release(int num, double event_t)
 {
     if (num == 4) {
-        mono_active = 0;
+        mono_off_time = event_t;
     }
 }
 
@@ -232,24 +258,34 @@ void handle_mouse_click(int num, double event_t)
         mouse_state.wheel = 0;
         printf("Mouse reset\n");
     }
-    if (num == 4) {
-        mono_active = 1;
+    else if (num == 4) {
+        mono_on_time = event_t;
+        mono_off_time = A_LOT;
+    }
+    else if (num == 5) {
+        mono_program = (mono_program + 1) % NUM_MONO_PROGRAMS;
+        printf("Selecting mono program %d\n", mono_program);
     }
     else {
         printf("Clicked button %d at %g.\n", num, event_t);
     }
 }
 
-double process_mono(double rate)
+double process_mono(double t_on, double t_off, double rate, double param_a, double param_b)
 {
+    double v = 0;
+    double velocity = 0.5 + 0.5 * tanh(-mouse_state.y * 0.03);
     double freq = mtof(mouse_state.x * 0.05 + 60) * rate;
-    mono_phase += freq * SAMPDELTA;
-    return sine(
-        mono_phase +
-        sine(mono_phase) * last_param_a * 0.3 +
-        sine(0.5 * mono_phase) * (0.1 + last_param_b * 0.2)
-    ) * (0.3 + 0.3 * tanh(-mouse_state.y * 0.02)) *
-        (1 - 0.1 * last_param_a - 0.1 * last_param_b);
+    if (mono_program == 0) {
+        mono_osc.velocity = velocity;
+        v = fm_meow(mono_osc, t, t_on, t_off, param_a, param_b);
+        osc_step(&mono_osc, freq);
+    }
+    else if (mono_program == 1) {
+        mono_voice.velocity = velocity * 0.8;
+        v = voice_step(&mono_voice, t, t_on, t_off, freq, param_a, param_b);
+    }
+    return v;
 }
 
 static int paCallback(
@@ -273,14 +309,14 @@ static int paCallback(
 
     for (int i = 0; i < framesPerBuffer; i++) {
         double pitch_bend = joy_state.pitch_bend + midi_state.pitch_bend;
-        double modulation = joy_state.modulation + midi_state.modulation;
+        double modulation = joy_state.modulation + midi_state.modulation + mouse_state.wheel * 0.05;
         double param_a = joy_state.param_a;
         double param_b = joy_state.param_b;
 
-        if (!mono_active) {
-            param_a += mouse_state.x * 0.01;
-            param_b -= mouse_state.y * 0.01;
-        }
+        // if (!mono_active) {
+        //     param_a += mouse_state.x * 0.01;
+        //     param_b -= mouse_state.y * 0.01;
+        // }
 
         last_pitch_bend = pitch_bend = 0.9 * last_pitch_bend + 0.1 * pitch_bend;
         last_modulation = modulation = 0.9 * last_modulation + 0.1 * modulation;
@@ -346,13 +382,22 @@ static int paCallback(
             else if (program == 11) {
                 v = pipe_step(pipes + j, rate, t_off);
             }
+            else if (program == 12) {
+                v = voice_step(voices + j, t, t_on, t_off, rate, param_a, param_b);
+            }
             out_v += v;
         }
-        if (mono_active) {
-            out_v += process_mono(rate);
+        double t_on = t - mono_on_time;
+        double t_off = t - mono_off_time;
+        if (t_off <= MAX_DECAY || t_on < 0) {
+            out_v += process_mono(t_on, t_off, rate, param_a, param_b);
         }
 
         t += SAMPDELTA;
+
+        if (data->record_index < data->record_num_samples) {
+            data->record_samples[data->record_index++] = out_v;
+        }
 
         *out++ = (float) out_v;    /* left */
         *out++ = (float) out_v;    /* right */
@@ -371,6 +416,10 @@ int main(void)
     PaStreamParameters outputParameters;
     PaError err;
     paUserData data;
+
+    data.record_num_samples = RECORD_NUM_SAMPLES;
+    data.record_index = 0;
+    data.record_samples = calloc(data.record_num_samples, sizeof(double));
 
     printf("PortAudio synth. SR = %d, BufSize = %d\n", SAMPLE_RATE, FRAMES_PER_BUFFER);
 
@@ -447,6 +496,13 @@ int main(void)
 
     close_joy();
     close_midi();
+
+    FILE *f;
+    f = fopen("dumps/record.raw", "wb");
+    fwrite(data.record_samples, sizeof(double), data.record_index, f);
+    fclose(f);
+
+    printf("Recorded %g seconds of audio.\n", data.record_index * SAMPDELTA);
 
     printf("K thx bye!\n");
 

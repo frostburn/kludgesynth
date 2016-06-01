@@ -28,6 +28,14 @@ double sine_series_odd_mu(double phase, double n)
     return (0.5 - 0.5 * cosine(floor_n)) / s + sine(floor_n + phase) * mu;
 }
 
+double sineblit_step(blit_state *b, double rate)
+{
+    double freq = b->freq * rate;
+    double v = sine_series_mu(b->phase, 0.5 * SAMPLE_RATE / freq);
+    b->phase += SAMPDELTA * freq;
+    return v;
+}
+
 // Returns sum(z ** i for i in range(n)) with linear fading of the last power.
 complex double power_series_mu(complex double z, double n)
 {

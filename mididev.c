@@ -23,12 +23,7 @@ int process_midi(void (process_midi_event)(const midi_event)) {
     raw_midi_event ev[MIDI_BUFFER];
     int num_bytes = read(midi_fd, ev, sizeof(raw_midi_event) * MIDI_BUFFER);
     if (num_bytes < 0) {
-        #ifdef DEV_NONBLOCK
-            return num_bytes;
-        #else
-            printf("Error reading midi events\n");
-            exit(1);
-        #endif
+        return num_bytes;
     }
     // TODO: Read raw bytes one by one and deal with two byte events properly.
     for (int i = 0; i < ceil_div(num_bytes, sizeof(raw_midi_event)); i++) {

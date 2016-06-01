@@ -45,3 +45,34 @@ double lissajous13(double phase, double sharpness, double bias)
     double x = phase - floor(phase + 0.5);
     return atan2((1 + sharpness) * sine(1.5 * x), (1 - sharpness) * cosine(0.5 * x + bias / 3.0)) * 2.0 / M_PI + x + x;
 }
+
+double saw(double phase)
+{
+    return 2 * (phase - floor(phase + 0.5));
+}
+
+double par(double phase)
+{
+    phase -= floor(phase + 0.5);
+    return 0.5 - 6 * phase * phase;
+}
+
+double cub(double phase)
+{
+    phase -= floor(phase + 0.5);
+    return phase * (5.19615242270663188 - 20.7846096908265275 * phase * phase);
+}
+
+double qua(double phase)
+{
+    phase -= floor(phase + 0.5);
+    phase *= phase;
+    return 0.875 - phase * (15 - 30 * phase);
+}
+
+double qui(double phase)
+{
+    phase -= floor(phase + 0.5);
+    double x2 = phase * phase;
+    return phase * (5.96255602510703402 - x2 * (34.0717487148973373 - 40.8860984578768047 * x2));
+}

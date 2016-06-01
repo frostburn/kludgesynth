@@ -103,12 +103,7 @@ int process_joy(void (process_joy_event)(const joy_event))
     joy_event ev[JOY_BUFFER];
     int num_bytes = read(joy_fd, ev, sizeof(joy_event) * JOY_BUFFER);
     if (num_bytes < 0) {
-        #ifdef DEV_NONBLOCK
-            return num_bytes;
-        #else
-            printf("Error reading joy events\n");
-            exit(1);
-        #endif
+        return num_bytes;
     }
     for (int i = 0; i < num_bytes / sizeof(joy_event); i++) {
         process_joy_event(ev[i]);

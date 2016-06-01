@@ -19,6 +19,14 @@ typedef struct blsaw_state
     polezero_state polezero;
 } blsaw_state;
 
+typedef struct voice_state
+{
+    double velocity;
+    double off_velocity;
+    blit_state blit;
+    filter_state filters[3];
+} voice_state;
+
 typedef struct pipe_state
 {
     double velocity;
@@ -92,6 +100,33 @@ double blsaw_step(blsaw_state *blsaw, double rate, double t_on, double t_off, do
     double v = polezero_step(&blsaw->polezero, cimag(blit_step(&blsaw->blit, rate, softness) * z) * blsaw->velocity);
     blsaw->shift_phase += blsaw->blit.freq * rate * shift * SAMPDELTA;
     return v;
+}
+
+void voice_init(voice_state *voice)
+{
+    voice->blit.phase = 0;
+    voice->blit.freq = 0;
+    for (int i = 0; i < 3; i++) {
+        filter_reset(voice->filters + i);
+    }
+}
+
+double voice_step(voice_state *voice, double t, double t_on, double t_off, double rate, double formant_a, double formant_b)
+{
+    if (t_off > 0.1) {
+        return 0;
+    }
+    if (t_off < 0) {
+        t_off = 0;
+    }
+    double normalizer = voice->blit.freq * rate * SAMPDELTA;
+    filter_lpf(voice->filters + 0, 400, 10000);
+    filter_bpf(voice->filters + 1, 400 + 400 * formant_a, 300);
+    filter_bpf(voice->filters + 2, 1100 + 900 * formant_b, 400);
+    double v = sineblit_step(&voice->blit, rate) * normalizer;
+    v = filter_step(voice->filters + 0, v);
+    v = filter_step(voice->filters + 1, v) * (2.5 - 0.9 * formant_a) + filter_step(voice->filters + 2, v) * (2.2 - 1.5 * formant_b);
+    return tanh(v * 2.5 * voice->velocity * tanh(50 * t_on) * exp(-50 * t_off));
 }
 
 void pipe_init(pipe_state *p, double freq)

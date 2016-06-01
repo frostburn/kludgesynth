@@ -59,3 +59,17 @@ double softsaw_bass(const osc_state osc, double t, double t_on, double t_off, do
     }
     return v;
 }
+
+double fm_meow(const osc_state osc, double t, double t_on, double t_off, double param_a, double param_b)
+{
+    double v = qui(osc.phase);
+    v = qui(
+        2 * osc.phase +
+        qui(osc.phase + v * 0.07) * param_a * 0.3 +
+        v * (0.1 + param_b * 0.2)
+    ) * (1 - 0.2 * param_a - 0.1 * param_b) * osc.velocity * tanh(100 * t_on);
+    if (t_off >= 0) {
+        v *= exp(-t_off * 100);
+    }
+    return v;
+}

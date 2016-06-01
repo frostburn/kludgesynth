@@ -37,7 +37,7 @@ int main()
     printf("<= %g\n", max_amplitude);
     FILE *f;
     f = fopen("dumps/temp.raw", "wb");
-    fwrite(samples, sizeof(double),NUM_SAMPLES, f);
+    fwrite(samples, sizeof(double), NUM_SAMPLES, f);
     fclose(f);
     return 0;
 }

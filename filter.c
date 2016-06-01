@@ -172,7 +172,6 @@ void filter_resonator(filter_state *filter, double freq, double decay)
     filter->cpole.a1 = -cexp(SAMPDELTA * (2 * M_PI * I * freq - decay));
 }
 
-
 void filter_lpf(filter_state *filter, double freq, double decay)
 {
     filter_resonator(filter, freq, decay);

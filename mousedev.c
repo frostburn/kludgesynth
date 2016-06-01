@@ -40,12 +40,7 @@ int process_mouse(void (process_mouse_event)(const mouse_event)) {
     raw_mouse_event ev[MOUSE_BUFFER];
     int num_bytes = read(mouse_fd, ev, sizeof(raw_mouse_event) * MOUSE_BUFFER);
     if (num_bytes < 0) {
-        #ifdef DEV_NONBLOCK
-            return num_bytes;
-        #else
-            printf("Error reading mouse events\n");
-            exit(1);
-        #endif
+        return num_bytes;
     }
     mouse_event e = {0, 0, 0, 0, 0, 0};
     for (int i = 0; i < num_bytes / sizeof(raw_mouse_event); i++) {
