@@ -17,6 +17,7 @@
 #include "joydev.c"
 #include "mididev.c"
 #include "mousedev.c"
+#include "kbdev.c"
 #include "linreg.c"
 #include "scale.c"
 #include "clock_fit.c"
@@ -87,6 +88,9 @@ static voice_state mono_voice;
 
 static int mono_program = 0;
 
+static double kick_on_time;
+static double hihat_on_time;
+
 void init_voices()
 {
     for (int i = 0; i < NUM_VOICES; i++) {
@@ -126,6 +130,9 @@ void init_voices()
     voice_init(&mono_voice);
     mono_voice.blit.freq = 1;
     mono_voice.velocity = 0.5;
+
+    kick_on_time = -A_LOT;
+    hihat_on_time = -A_LOT;
 }
 
 int find_voice_index()
@@ -245,10 +252,24 @@ void handle_mouse_release(int num, double event_t)
     }
 }
 
+void handle_drum_on(int num, double event_t) {
+    if (num % 2) {
+        kick_on_time = event_t;
+    }
+    else {
+        hihat_on_time = event_t;
+    }
+}
+
+void handle_drum_off(int num, double event_t) {
+    return;
+}
+
 #define MAX_EVENTS (128)
 #include "handle_joy.c"
 #include "handle_midi.c"
 #include "handle_mouse.c"
+#include "handle_kb.c"
 
 void handle_mouse_click(int num, double event_t)
 {
@@ -274,7 +295,7 @@ void handle_mouse_click(int num, double event_t)
 double process_mono(double t_on, double t_off, double rate, double param_a, double param_b)
 {
     double v = 0;
-    double velocity = 0.5 + 0.5 * tanh(-mouse_state.y * 0.03);
+    double velocity = 0.5 + 0.5 * ferf(-mouse_state.y * 0.03);
     double freq = mtof(mouse_state.x * 0.05 + 60) * rate;
     if (mono_program == 0) {
         mono_osc.velocity = velocity;
@@ -284,6 +305,20 @@ double process_mono(double t_on, double t_off, double rate, double param_a, doub
     else if (mono_program == 1) {
         mono_voice.velocity = velocity * 0.8;
         v = voice_step(&mono_voice, t, t_on, t_off, freq, param_a, param_b);
+    }
+    return v;
+}
+
+double process_drums()
+{
+    double v = 0;
+    double kick_t = t - kick_on_time;
+    if (kick_t >= 0 && kick_t < 1) {
+        v += ferf(cub(20 * exp(-10 * kick_t)) * fexp(-5 * kick_t)) * 0.3;
+    }
+    double hihat_t = t - hihat_on_time;
+    if (hihat_t >= 0 && hihat_t < 1) {
+        v += frand() * hihat_t * fexp(-60 * hihat_t) * 7;
     }
     return v;
 }
@@ -306,6 +341,8 @@ static int paCallback(
 
     last_t = t;
     next_t = t + framesPerBuffer * SAMPDELTA;
+
+    // TODO: Fix a crash when iterating all programs.
 
     for (int i = 0; i < framesPerBuffer; i++) {
         double pitch_bend = joy_state.pitch_bend + midi_state.pitch_bend;
@@ -393,6 +430,8 @@ static int paCallback(
             out_v += process_mono(t_on, t_off, rate, param_a, param_b);
         }
 
+        out_v += process_drums();
+
         t += SAMPDELTA;
 
         if (data->record_index < data->record_num_samples) {
@@ -477,6 +516,13 @@ int main(void)
     }
     else {
         printf("Mouse disabled.\n");
+    }
+
+    if (init_kb(NULL)) {
+        launch_kb();
+    }
+    else {
+        printf("Keyboard disabled.\n");
     }
 
     err = Pa_StartStream(stream);

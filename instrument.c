@@ -126,7 +126,7 @@ double voice_step(voice_state *voice, double t, double t_on, double t_off, doubl
     double v = sineblit_step(&voice->blit, rate) * normalizer;
     v = filter_step(voice->filters + 0, v);
     v = filter_step(voice->filters + 1, v) * (2.5 - 0.9 * formant_a) + filter_step(voice->filters + 2, v) * (2.2 - 1.5 * formant_b);
-    return tanh(v * 2.5 * voice->velocity * tanh(50 * t_on) * exp(-50 * t_off));
+    return ferf(v * 2.5 * voice->velocity * ferf(50 * t_on) * fexp(-50 * t_off));
 }
 
 void pipe_init(pipe_state *p, double freq)

@@ -7,13 +7,16 @@
 
 int main(int argc, char *argv[])
 {
+    char *filename = NULL;
     int event_size = -1;
-    if (argc == 2) {
+    if (argc >= 2) {
         event_size = atoi(argv[1]);
     }
-    char *filename = NULL;
+    if (argc >= 3) {
+        filename = argv[2];
+    }
     if (filename == NULL) {
-        filename = "/dev/input/event2";
+        filename = "/dev/input/event3";
     }
 
     int fd = open(filename, O_RDONLY);
