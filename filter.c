@@ -96,8 +96,7 @@ double polezero_step(polezero_state *p, double sample)
 {
     double y0 = p->b0 * sample + p->b1 * p->x1 - p->a1 * p->y1;
     p->x1 = sample;
-    p->y1 = y0;
-    return y0;
+    return p->y1 = y0;
 }
 
 void polezero_integrator(polezero_state *p, double gain, double leak_constant)
@@ -105,6 +104,13 @@ void polezero_integrator(polezero_state *p, double gain, double leak_constant)
     p->b0 = 0.5 * gain * SAMPDELTA;
     p->b1 = 0.5 * gain * SAMPDELTA;
     p->a1 = -leak_constant;
+}
+
+void polezero_apf(polezero_state *p, double g)
+{
+    p->b0 = g;
+    p->b1 = 1;
+    p->a1 = g;
 }
 
 void biquad_reset(biquad_state *b)
@@ -213,6 +219,12 @@ void filter_apf(filter_state *filter, double freq, double decay)
     filter->twozero.b1 = 2 * r * m;
 }
 
+void buffer_preinit(buffer_state *b)
+{
+    b->num_samples = 0;
+    b->samples = NULL;
+}
+
 void buffer_init(buffer_state *b, int num_samples)
 {
     b->num_samples = num_samples;
@@ -223,7 +235,9 @@ void buffer_init(buffer_state *b, int num_samples)
 
 void buffer_destroy(buffer_state *b)
 {
-    free(b->samples);
+    double *samples = b->samples;
+    buffer_preinit(b);
+    free(samples);
 }
 
 void buffer_step(buffer_state *b, double sample)
@@ -242,6 +256,9 @@ double buffer_delay(const buffer_state b, int delay)
         assert(delay >= 0);
         assert(delay <= b.num_samples);
     #endif
+    if (!b.samples) {
+        return 0;
+    }
     int index = b.index - delay;
     if (index < 0) {
         index += b.num_samples;

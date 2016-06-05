@@ -30,13 +30,11 @@ void handle_kb_event(const kb_event e)
     if (e.type == KEY_PRESSED) {
         int index = find_perc_index();
         index_by_key[e.key] = index;
-        handle_perc_on(index, e.key % 2, event_t, 0.7);
+        handle_perc_on(index, e.key % NUM_PERC_PROGRAMS, event_t, 0.7);
     }
     else if (e.type == KEY_RELEASED) {
         int index = index_by_key[e.key];
-        if (index >= 0) {
-            handle_perc_off(index, event_t, 0.5);
-        }
+        handle_perc_off(index, event_t, 0.5);
     }
 }
 

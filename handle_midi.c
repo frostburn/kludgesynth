@@ -54,18 +54,14 @@ void handle_midi_event(const midi_event e)
     #endif
     if (e.type == NOTE_ON) {
         int index = index_by_pitch[e.channel][e.pitch];
-        if (index >= 0) {
-            handle_note_off(index, event_t, e.velocity / 127.0);
-        }
+        handle_note_off(index, event_t, e.velocity / 127.0);
         index = find_voice_index();
         index_by_pitch[e.channel][e.pitch] = index;
         handle_note_on(index, midi_state.program[e.channel], event_t, mtof(e.pitch), e.velocity / 127.0);
     }
     else if (e.type == NOTE_OFF) {
         int index = index_by_pitch[e.channel][e.pitch];
-        if (index >= 0) {
-            handle_note_off(index, event_t, e.velocity / 127.0);
-        }
+        handle_note_off(index, event_t, e.velocity / 127.0);
     }
     else if (e.type == CONTROL_CHANGE) {
         if (e.pitch == MODULATION) {

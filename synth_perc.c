@@ -1,3 +1,9 @@
+#define NUM_PERC_PROGRAMS (3)
+
+#define PERC_KICK (0)
+#define PERC_SNARE (1)
+#define PERC_HIHAT (2)
+
 static PaStream *perc_stream;
 
 double perc_t = 0;
@@ -11,6 +17,8 @@ static int perc_programs[NUM_VOICES];
 static double perc_velocities[NUM_VOICES];
 static double perc_off_velocities[NUM_VOICES];
 
+static snare_state snares[NUM_VOICES];
+
 void init_percussion()
 {
     for (int i = 0; i < NUM_VOICES; i++) {
@@ -20,6 +28,8 @@ void init_percussion()
 
         perc_velocities[i] = 0;
         perc_off_velocities[i] = 0;
+
+        snare_preinit(snares + i);
     }
 }
 
@@ -41,14 +51,25 @@ int find_perc_index()
 
 void handle_perc_on(int index, int program, double event_t, double velocity)
 {
+    if (index < 0) {
+        return;
+    }
     perc_on_times[index] = event_t;
     perc_off_times[index] = A_LOT;
     perc_programs[index] = program;
     perc_velocities[index] = velocity;
+
+    if (program == PERC_SNARE) {
+        snare_destroy(snares + index);
+        snare_init(snares + index, velocity);
+    }
 }
 
 void handle_perc_off(int index, double event_t, double velocity)
 {
+    if (index < 0) {
+        return;
+    }
     int program = perc_programs[index];
     program += 0;
     if (event_t < perc_off_times[index]) {
@@ -87,14 +108,17 @@ static int paPercCallback(
                 continue;
             }
             double v = 0;
-            if (program == 0) {
+            if (program == PERC_KICK) {
                 if (t_on < 0.5) {
                     v += ferf(cub(20 * exp(-10 * t_on)) * fexp(-5 * t_on)) * 0.2 * perc_velocities[j];
                 }
             }
-            else if (program == 1) {
+            else if (program == PERC_SNARE) {
+                v += snare_step(snares + j, t_on);
+            }
+            else if (program == PERC_HIHAT) {
                 if (t_on < 1) {
-                    v += frand() * t_on * fexp(-60 * t_on) * 8 * perc_velocities[j];
+                    v += frand() * t_on * fexp(-60 * t_on) * 14 * perc_velocities[j];
                 }
             }
             out_v += v;

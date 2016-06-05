@@ -14,8 +14,7 @@ typedef struct sineping_state
     double a2;
 } sineping_state;
 
-
-// Generates amplitude * sin(2 * pi * (t * freq + phase)) that exponentially decays to the target amplitude in 1 second.
+// Generates amplitude * sin(2 * pi * (t * freq + phase)) that exponentially decays by target factor in 1 second.
 void sineping_init(sineping_state *s, double phase, double freq, double amplitude, double decay)
 {
     double d = pow(decay, SAMPDELTA);
@@ -46,6 +45,12 @@ typedef struct pingsum_state
     double z1;
 } pingsum_state;
 
+void pingsum_preinit(pingsum_state *p)
+{
+    p->num_voices = 0;
+    p->pings = NULL;
+}
+
 void pingsum_init(pingsum_state *p, int num_voices)
 {
     p->num_voices = num_voices;
@@ -58,7 +63,9 @@ void pingsum_init(pingsum_state *p, int num_voices)
 
 void pingsum_destroy(pingsum_state *p)
 {
-    free(p->pings);
+    sineping_state *pings = p->pings;
+    pingsum_preinit(p);
+    free(pings);
 }
 
 double _pingsum_step(pingsum_state *p)

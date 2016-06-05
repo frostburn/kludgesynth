@@ -39,6 +39,7 @@
 #include "blit.c"
 
 #include "instrument.c"
+#include "percussion.c"
 
 #define NUM_VOICES (16)
 #define NUM_PROGRAMS (12)
@@ -89,6 +90,7 @@ static int mono_program = 0;
 
 void init_voices()
 {
+    // TODO: Use preinits.
     for (int i = 0; i < NUM_VOICES; i++) {
         on_times[i] = -A_LOT;
         off_times[i] = -A_LOT;
@@ -147,6 +149,9 @@ int find_voice_index()
 
 void handle_note_on(int index, int program, double event_t, double freq, double velocity)
 {
+    if (index < 0) {
+        return;
+    }
     on_times[index] = event_t;
     off_times[index] = A_LOT;
     programs[index] = program;
@@ -223,6 +228,9 @@ void handle_note_on(int index, int program, double event_t, double freq, double 
 
 void handle_note_off(int index, double event_t, double velocity)
 {
+    if (index < 0) {
+        return;
+    }
     int program = programs[index];
     if (event_t < off_times[index]) {
         off_times[index] = event_t;

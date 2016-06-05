@@ -99,9 +99,7 @@ void handle_joy_event(const joy_event e)
                 return;
             }
             int index = index_by_button[e.num];
-            if (index >= 0) {
-                handle_note_off(index, event_t, joy_state.velocity);
-            }
+            handle_note_off(index, event_t, joy_state.velocity);
         }
     }
     else if (e.type == JOY_AXIS){

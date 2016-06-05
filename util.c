@@ -1,3 +1,4 @@
+#include <time.h>
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,6 +13,10 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 #define CLIP(x, min, max) ((x) < (min)) ? (min) : (((x) > (max)) ? (max) : (x))
+
+int popcount(unsigned int x) {
+    return __builtin_popcount(x);
+}
 
 double clip(double x, double min, double max)
 {
