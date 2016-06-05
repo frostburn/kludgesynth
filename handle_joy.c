@@ -3,6 +3,7 @@
 
 typedef struct joy_state_t
 {
+    int program;
     double pitch_bend;
     double modulation;
     double velocity;
@@ -26,7 +27,7 @@ static int joy_event_index = -1;
 int index_by_button[NUM_BUTTONS];
 
 static joy_state_t joy_state = {
-    0, 0, 0.5, 0, 0, 0, 0, 0
+    0, 0, 0, 0.5, 0, 0, 0, 0, 0
 };
 
 void handle_joy_event(const joy_event e)
@@ -62,14 +63,14 @@ void handle_joy_event(const joy_event e)
                     printf("Selecting scale %d\n", joy_state.scale);
                 }
                 else if (e.num == 4 || e.num == 5) {
-                    program += e.num == 4 ? -1 : 1;
-                    if (program < 0) {
-                        program += NUM_PROGRAMS;
+                    joy_state.program += e.num == 4 ? -1 : 1;
+                    if (joy_state.program < 0) {
+                        joy_state.program += NUM_PROGRAMS;
                     }
-                    else if (program >= NUM_PROGRAMS) {
-                        program -= NUM_PROGRAMS;
+                    else if (joy_state.program >= NUM_PROGRAMS) {
+                        joy_state.program -= NUM_PROGRAMS;
                     }
-                    printf("Selecting program %d\n", program);
+                    printf("Selecting program %d\n", joy_state.program);
                 }
                 return;
             }
@@ -89,7 +90,7 @@ void handle_joy_event(const joy_event e)
                 pitch = major_pentatonic(e.num, joy_state.key_mod);
             }
             double freq = mtof(pitch + 60 + 12 * joy_state.octave + joy_state.transpose + joy_state.pitch_shift);
-            handle_note_on(index, event_t, freq, joy_state.velocity);
+            handle_note_on(index, joy_state.program, event_t, freq, joy_state.velocity);
         }
         else {
             if (e.num == 10) {

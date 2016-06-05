@@ -13,13 +13,11 @@ typedef struct midi_event
     unsigned char velocity;
 } midi_event;
 
-static int midi_fd;
-
 void print_midi_event(const midi_event e) {
     printf("midi_event(\n  channel=%d\n  type=%d\n  pitch=%d\n  velocity=%d\n)\n", e.channel, e.type, e.pitch, e.velocity);
 }
 
-int process_midi(void (process_midi_event)(const midi_event)) {
+int process_midi(int midi_fd, void (process_midi_event)(const midi_event)) {
     raw_midi_event ev[MIDI_BUFFER];
     int num_bytes = read(midi_fd, ev, sizeof(raw_midi_event) * MIDI_BUFFER);
     if (num_bytes < 0) {
@@ -39,10 +37,10 @@ int init_midi(char *filename) {
         filename = "/dev/midi2";
     }
 
-    midi_fd = open(filename, O_RDONLY);
+    int midi_fd = open(filename, O_RDONLY);
     if (midi_fd == -1) {
         printf("Error: cannot open %s\n", filename);
-        return 0;
+        return midi_fd;
     }
     else {
         printf("Device open at %s\n", filename);
@@ -51,14 +49,14 @@ int init_midi(char *filename) {
         int flags = fcntl(midi_fd, F_GETFL, 0);
         if (fcntl(midi_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
             printf("Error setting non-blocking mode\n");
-            return 0;
+            return -1;
         }
     #endif
 
-    return 1;
+    return midi_fd;
 }
 
-void close_midi()
+void close_midi(int midi_fd)
 {
     close(midi_fd);
 }

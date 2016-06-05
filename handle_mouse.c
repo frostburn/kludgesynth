@@ -23,8 +23,6 @@ static double mouse_event_clocks[MAX_EVENTS];
 static mouse_clock_t last_mouse_clock;
 static int mouse_event_index = -1;
 
-static int index_by_pitch[NUM_PITCHES];
-
 static mouse_state_t mouse_state = {
     0, 0, 0, 0
 };

@@ -1,3 +1,4 @@
+#define NUM_CHANNELS (16)
 #define NUM_PITCHES (128)
 
 #define NOTE_ON (0x90)
@@ -18,8 +19,9 @@
 
 typedef struct midi_state_t
 {
-    double pitch_bend;
-    double modulation;
+    double pitch_bend[NUM_CHANNELS];
+    double modulation[NUM_CHANNELS];
+    int program[NUM_CHANNELS];
 } midi_state_t;
 
 static pthread_t midi_thread;
@@ -29,11 +31,9 @@ static double midi_event_clocks[MAX_EVENTS];
 static clock_t last_midi_clock;
 static int midi_event_index = -1;
 
-static int index_by_pitch[NUM_PITCHES];
+static int index_by_pitch[NUM_CHANNELS][NUM_PITCHES];
 
-static midi_state_t midi_state = {
-    0, 0
-};
+static midi_state_t midi_state = {0};
 
 void handle_midi_event(const midi_event e)
 {
@@ -54,23 +54,23 @@ void handle_midi_event(const midi_event e)
         printf("%ld: %g, %g, %g -> %g\n", midi_clock, last_t, t, next_t, event_t);
     #endif
     if (e.type == NOTE_ON) {
-        int index = index_by_pitch[e.pitch];
+        int index = index_by_pitch[e.channel][e.pitch];
         if (index >= 0) {
             handle_note_off(index, event_t, e.velocity / 127.0);
         }
         index = find_voice_index();
-        index_by_pitch[e.pitch] = index;
-        handle_note_on(index, event_t, mtof(e.pitch), e.velocity / 127.0);
+        index_by_pitch[e.channel][e.pitch] = index;
+        handle_note_on(index, midi_state.program[e.channel], event_t, mtof(e.pitch), e.velocity / 127.0);
     }
     else if (e.type == NOTE_OFF) {
-        int index = index_by_pitch[e.pitch];
+        int index = index_by_pitch[e.channel][e.pitch];
         if (index >= 0) {
             handle_note_off(index, event_t, e.velocity / 127.0);
         }
     }
     else if (e.type == CONTROL_CHANGE) {
         if (e.pitch == MODULATION) {
-            midi_state.modulation = e.velocity / 127.0;
+            midi_state.modulation[e.channel] = e.velocity / 127.0;
         }
         else if (e.pitch == ALL_NOTES_OFF || e.pitch == ALL_SOUND_OFF) {
             for (int i = 0; i < NUM_VOICES; i++) {
@@ -79,30 +79,36 @@ void handle_midi_event(const midi_event e)
         }
     }
     else if (e.type == PITCH_BEND) {
-        midi_state.pitch_bend = (e.velocity + e.pitch / 127.0 - 64.0) / 32.0;
+        midi_state.pitch_bend[e.channel] = (e.velocity + e.pitch / 127.0 - 64.0) / 32.0;
         if (e.pitch == 127 && e.velocity == 127) {
-            midi_state.pitch_bend = 2;
+            midi_state.pitch_bend[e.channel] = 2;
         }
     }
     else if (e.type == PROGRAM_CHANGE) {
-        program = e.pitch;
-        printf("Selecting program %d\n", program);
+        midi_state.program[e.channel] = e.pitch;
+        printf("Selecting program %d on channel %d\n", midi_state.program[e.channel], e.channel);
     }
 }
 
 void* midi_thread_function(void *args)
 {
+    int midi_fd = *((int*) args);
+    free(args);
     while (1) {
-        process_midi(handle_midi_event);
+        process_midi(midi_fd, handle_midi_event);
     }
 }
 
-void launch_midi()
+void launch_midi(int midi_fd)
 {
     for (int i = 0; i < NUM_PITCHES; i++) {
-        index_by_pitch[i] = -1;
+        for (int j = 0; j < NUM_CHANNELS; j++) {
+            index_by_pitch[j][i] = -1;
+        }
     }
-    int status = pthread_create(&midi_thread, NULL, midi_thread_function, NULL);
+    int *midi_fd_ptr = malloc(sizeof(int));
+    *midi_fd_ptr = midi_fd;
+    int status = pthread_create(&midi_thread, NULL, midi_thread_function, midi_fd_ptr);
     if (status == -1) {
         printf("Error: unable to create midi input thread.\n");
         exit(1);

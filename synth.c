@@ -67,6 +67,7 @@ static double last_param_b = 0;
 
 static double on_times[NUM_VOICES];
 static double off_times[NUM_VOICES];
+static int programs[NUM_VOICES];
 
 static osc_state oscs[NUM_VOICES];
 static kp_state karps[NUM_VOICES];
@@ -77,8 +78,6 @@ static pad_state pads[NUM_VOICES];
 static blsaw_state blsaws[NUM_VOICES];
 static pipe_state pipes[NUM_VOICES];
 static voice_state voices[NUM_VOICES];
-
-static int program = 0;
 
 static double mono_on_time = -A_LOT;
 static double mono_off_time = -A_LOT;
@@ -151,10 +150,11 @@ int find_voice_index()
     return -1;
 }
 
-void handle_note_on(int index, double event_t, double freq, double velocity)
+void handle_note_on(int index, int program, double event_t, double freq, double velocity)
 {
     on_times[index] = event_t;
     off_times[index] = A_LOT;
+    programs[index] = program;
 
     if (program == 0 || program == 1 || program == 8) {
         oscs[index].phase = 0;
@@ -228,6 +228,7 @@ void handle_note_on(int index, double event_t, double freq, double velocity)
 
 void handle_note_off(int index, double event_t, double velocity)
 {
+    int program = programs[index];
     if (event_t < off_times[index]) {
         off_times[index] = event_t;
 
@@ -345,8 +346,9 @@ static int paCallback(
     // TODO: Fix a crash when iterating all programs.
 
     for (int i = 0; i < framesPerBuffer; i++) {
-        double pitch_bend = joy_state.pitch_bend + midi_state.pitch_bend;
-        double modulation = joy_state.modulation + midi_state.modulation + mouse_state.wheel * 0.05;
+        // TODO: Support pitch bend per channel.
+        double pitch_bend = joy_state.pitch_bend + midi_state.pitch_bend[0];
+        double modulation = joy_state.modulation + midi_state.modulation[0] + mouse_state.wheel * 0.05;
         double param_a = joy_state.param_a;
         double param_b = joy_state.param_b;
 
@@ -363,6 +365,7 @@ static int paCallback(
         double rate = itor(pitch_bend + 0.7 * sin(2 * M_PI * 6 * t) * modulation);
         out_v = 0;
         for (int j = 0; j < NUM_VOICES; j++) {
+            int program = programs[j];
             double t_on = t - on_times[j];
             double t_off = t - off_times[j];
             if (t_off > MAX_DECAY || t_on < 0) {
@@ -394,7 +397,9 @@ static int paCallback(
                     }
                     return v;
                 }
-                v = noisy_step(noisys + j, rate, wf);
+                if (t_off < 0.2) {
+                    v = noisy_step(noisys + j, rate, wf);
+                }
             }
             else if (program == 6) {
                 v = pingsum_step(pingsums + j, rate) * tanh(t_on * 150);
@@ -504,11 +509,20 @@ int main(void)
         printf("Joy disabled.\n");
     }
 
-    if (init_midi(NULL)) {
-        launch_midi();
+    int midi_fd = init_midi(NULL);
+    if (midi_fd >= 0) {
+        launch_midi(midi_fd);
     }
     else {
         printf("Midi disabled.\n");
+    }
+
+    int seq_fd = init_midi("/dev/snd/midiC3D0");
+    if (seq_fd >= 0) {
+        launch_midi(seq_fd);
+    }
+    else {
+        printf("Sequencer disabled.\n");
     }
 
     if (init_mouse(NULL)) {
@@ -541,7 +555,8 @@ int main(void)
     Pa_Terminate();
 
     close_joy();
-    close_midi();
+    close_midi(midi_fd);
+    close_midi(seq_fd);
 
     FILE *f;
     f = fopen("dumps/record.raw", "wb");
