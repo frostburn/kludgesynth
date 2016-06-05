@@ -1,9 +1,13 @@
-#define MIDI_BUFFER (64)
+#define NOTE_OFF (0x80)
+#define NOTE_ON (0x90)
+#define AFTERTOUCH (0xa0)
+#define CONTROL_CHANGE (0xb0)
+#define PROGRAM_CHANGE (0xc0)
+#define CHANNEL_PRESSURE (0xd0)
+#define PITCH_BEND (0xe0)
+#define MIDI_SYSTEM (0xf0)
 
-typedef struct raw_midi_event
-{
-    unsigned char data[3];
-} raw_midi_event;
+#define MIDI_BUFFER (128)
 
 typedef struct midi_event
 {
@@ -17,16 +21,37 @@ void print_midi_event(const midi_event e) {
     printf("midi_event(\n  channel=%d\n  type=%d\n  pitch=%d\n  velocity=%d\n)\n", e.channel, e.type, e.pitch, e.velocity);
 }
 
-int process_midi(int midi_fd, void (process_midi_event)(const midi_event)) {
-    raw_midi_event ev[MIDI_BUFFER];
-    int num_bytes = read(midi_fd, ev, sizeof(raw_midi_event) * MIDI_BUFFER);
+int process_midi(int midi_fd, unsigned char *channel_ptr, unsigned char *type_ptr, void (process_midi_event)(const midi_event)) {
+    unsigned char buffer[MIDI_BUFFER];
+    int num_bytes = read(midi_fd, buffer, sizeof(unsigned char) * MIDI_BUFFER);
     if (num_bytes < 0) {
         return num_bytes;
     }
-    // TODO: Read raw bytes one by one and deal with two byte events properly.
-    for (int i = 0; i < ceil_div(num_bytes, sizeof(raw_midi_event)); i++) {
-        unsigned char *data = ev[i].data;
-        midi_event e = {data[0] & 0x0f, data[0] & 0xf0, data[1], data[2]};
+    midi_event e = {0, 0, 0, 0};
+    unsigned char channel = *channel_ptr;
+    unsigned char type = *type_ptr;
+    int i = 0;
+    while (i < num_bytes) {
+        unsigned char status = buffer[i];
+        unsigned char message_channel = status & 0x0f;
+        unsigned char message_type = status & 0xf0;
+        if (message_type >= NOTE_OFF) {
+            channel = message_channel;
+            type = message_type;
+            *channel_ptr = channel;
+            *type_ptr = type;
+            // TODO: Deal with the various system messages.
+            if (type == MIDI_SYSTEM) {
+                break;
+            }
+            i++;
+        }
+        unsigned char velocity = 0;
+        unsigned char pitch = buffer[i++];
+        if (type == NOTE_OFF || type == NOTE_ON || type == AFTERTOUCH || type == CONTROL_CHANGE || type == PITCH_BEND) {
+            velocity = buffer[i++];
+        }
+        e = (midi_event) {channel, type, pitch, velocity};
         process_midi_event(e);
     }
     return num_bytes;

@@ -35,7 +35,12 @@ int main(int argc, char *argv[])
         if (event_size < 0) {
             printf("Got %d bytes.\n", num_bytes);
             for (int i = 0; i < num_bytes; i++) {
-                printf("%3d: %3d\n", i, ev[i]);
+                if (event_size == -2) {
+                    printf("%3d: 0x%02x\n", i, ev[i]);
+                }
+                else {
+                    printf("%3d: %3d\n", i, ev[i]);
+                }
             }
         }
         else {

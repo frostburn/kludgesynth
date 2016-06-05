@@ -1,13 +1,6 @@
 #define NUM_CHANNELS (16)
 #define NUM_PITCHES (128)
 
-#define NOTE_ON (0x90)
-#define NOTE_OFF (0x80)
-#define CONTROL_CHANGE (0xb0)
-#define PROGRAM_CHANGE (0xc0)
-#define PITCH_BEND (0xe0)
-#define MIDI_SYSTEM (0xf0)
-
 #define MODULATION (0x01)
 #define ALL_SOUND_OFF (0x78)
 #define RESET_ALL_CONTROLLERS (0x79)
@@ -35,8 +28,14 @@ static int index_by_pitch[NUM_CHANNELS][NUM_PITCHES];
 
 static midi_state_t midi_state = {0};
 
+#include "handle_midi_perc.c"
+
 void handle_midi_event(const midi_event e)
 {
+    if (e.channel == 9) {
+        handle_midi_perc_event(e);
+        return;
+    }
     clock_t midi_clock = clock();
     if (midi_event_index < 0) {
         last_midi_clock = midi_clock;
@@ -94,8 +93,10 @@ void* midi_thread_function(void *args)
 {
     int midi_fd = *((int*) args);
     free(args);
+    unsigned char message_channel = 0;
+    unsigned char message_type = 0;
     while (1) {
-        process_midi(midi_fd, handle_midi_event);
+        process_midi(midi_fd, &message_channel, &message_type, handle_midi_event);
     }
 }
 
@@ -105,6 +106,7 @@ void launch_midi(int midi_fd)
         for (int j = 0; j < NUM_CHANNELS; j++) {
             index_by_pitch[j][i] = -1;
         }
+        index_by_perc_pitch[i] = -1;
     }
     int *midi_fd_ptr = malloc(sizeof(int));
     *midi_fd_ptr = midi_fd;

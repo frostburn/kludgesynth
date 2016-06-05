@@ -87,14 +87,12 @@ static voice_state mono_voice;
 
 static int mono_program = 0;
 
-static double kick_on_time;
-static double hihat_on_time;
-
 void init_voices()
 {
     for (int i = 0; i < NUM_VOICES; i++) {
         on_times[i] = -A_LOT;
         off_times[i] = -A_LOT;
+        programs[i] = -1;
 
         oscs[i].phase = A_LOT;
         oscs[i].freq = 0;
@@ -129,9 +127,6 @@ void init_voices()
     voice_init(&mono_voice);
     mono_voice.blit.freq = 1;
     mono_voice.velocity = 0.5;
-
-    kick_on_time = -A_LOT;
-    hihat_on_time = -A_LOT;
 }
 
 int find_voice_index()
@@ -244,6 +239,8 @@ void handle_note_off(int index, double event_t, double velocity)
     }
 }
 
+#include "synth_perc.c"
+
 void handle_mouse_click(int num, double event_t);
 
 void handle_mouse_release(int num, double event_t)
@@ -251,19 +248,6 @@ void handle_mouse_release(int num, double event_t)
     if (num == 4) {
         mono_off_time = event_t;
     }
-}
-
-void handle_drum_on(int num, double event_t) {
-    if (num % 2) {
-        kick_on_time = event_t;
-    }
-    else {
-        hihat_on_time = event_t;
-    }
-}
-
-void handle_drum_off(int num, double event_t) {
-    return;
 }
 
 #define MAX_EVENTS (128)
@@ -306,20 +290,6 @@ double process_mono(double t_on, double t_off, double rate, double param_a, doub
     else if (mono_program == 1) {
         mono_voice.velocity = velocity * 0.8;
         v = voice_step(&mono_voice, t, t_on, t_off, freq, param_a, param_b);
-    }
-    return v;
-}
-
-double process_drums()
-{
-    double v = 0;
-    double kick_t = t - kick_on_time;
-    if (kick_t >= 0 && kick_t < 1) {
-        v += ferf(cub(20 * exp(-10 * kick_t)) * fexp(-5 * kick_t)) * 0.3;
-    }
-    double hihat_t = t - hihat_on_time;
-    if (hihat_t >= 0 && hihat_t < 1) {
-        v += frand() * hihat_t * fexp(-60 * hihat_t) * 7;
     }
     return v;
 }
@@ -435,8 +405,6 @@ static int paCallback(
             out_v += process_mono(t_on, t_off, rate, param_a, param_b);
         }
 
-        out_v += process_drums();
-
         t += SAMPDELTA;
 
         if (data->record_index < data->record_num_samples) {
@@ -460,10 +428,14 @@ int main(void)
     PaStreamParameters outputParameters;
     PaError err;
     paUserData data;
+    paUserData perc_data;
 
     data.record_num_samples = RECORD_NUM_SAMPLES;
     data.record_index = 0;
     data.record_samples = calloc(data.record_num_samples, sizeof(double));
+
+    perc_data = data;
+    perc_data.record_samples = calloc(perc_data.record_num_samples, sizeof(double));
 
     printf("PortAudio synth. SR = %d, BufSize = %d\n", SAMPLE_RATE, FRAMES_PER_BUFFER);
 
@@ -492,12 +464,25 @@ int main(void)
     );
     if(err != paNoError) goto error;
 
+    err = Pa_OpenStream(
+        &perc_stream,
+        NULL, /* no input */
+        &outputParameters,
+        SAMPLE_RATE,
+        FRAMES_PER_BUFFER,
+        paNoFlag,
+        paPercCallback,
+        &perc_data
+    );
+    if(err != paNoError) goto error;
+
     sprintf(data.message, "No Message");
     err = Pa_SetStreamFinishedCallback(stream, &StreamFinished);
     if(err != paNoError) goto error;
 
     waveform_init();
     init_voices();
+    init_percussion();
 
     if (open_joy(NULL)) {
         joy_description joy_desc;
@@ -542,6 +527,9 @@ int main(void)
     err = Pa_StartStream(stream);
     if(err != paNoError) goto error;
 
+    err = Pa_StartStream(perc_stream);
+    if(err != paNoError) goto error;
+
     printf("Synth initialized!\n");
     printf("Press ENTER key to quit.\n");  
     getchar();
@@ -549,7 +537,13 @@ int main(void)
     err = Pa_StopStream(stream);
     if(err != paNoError) goto error;
 
+    err = Pa_StopStream(perc_stream);
+    if(err != paNoError) goto error;
+
     err = Pa_CloseStream(stream);
+    if(err != paNoError) goto error;
+
+    err = Pa_CloseStream(perc_stream);
     if(err != paNoError) goto error;
 
     Pa_Terminate();
@@ -557,6 +551,8 @@ int main(void)
     close_joy();
     close_midi(midi_fd);
     close_midi(seq_fd);
+    close_mouse();
+    close_kb();
 
     FILE *f;
     f = fopen("dumps/record.raw", "wb");
