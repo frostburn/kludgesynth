@@ -125,6 +125,19 @@ double qui(double phase)
     return phase * (5.96255602510703402 - x2 * (34.0717487148973373 - 40.8860984578768047 * x2));
 }
 
+double square(double phase, double bias)
+{
+    return 2 * (floor(phase) - floor(phase - 0.5 + bias)) - 1;
+}
+
+// Integral of floor(t)
+// t * floor(t) - 0.5 * (floor(t) * floor(t + 1))
+
+double triangle(double phase)
+{
+    return 4 * fabs(phase - floor(phase) - 0.5) - 1;
+}
+
 #ifndef MAIN
 int main()
 {

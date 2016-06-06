@@ -31,10 +31,16 @@ typedef struct pink_state
     double normalizer;
 } pink_state;
 
+static unsigned int _lcg_seed = 22222;
+
+void seed_lcg(unsigned int seed)
+{
+    _lcg_seed = seed;
+}
+
 unsigned int lcg()
 {
-    static unsigned int lcg_seed = 22222;
-    return lcg_seed = (lcg_seed * 196314165) + 907633515;
+    return _lcg_seed = (_lcg_seed * 196314165) + 907633515;
 }
 
 void snow_init(snow_state *s)

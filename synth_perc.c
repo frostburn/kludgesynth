@@ -18,6 +18,7 @@ static double perc_velocities[NUM_VOICES];
 static double perc_off_velocities[NUM_VOICES];
 
 static snare_state snares[NUM_VOICES];
+static hihat_state hihats[NUM_VOICES];
 
 void init_percussion()
 {
@@ -62,6 +63,9 @@ void handle_perc_on(int index, int program, double event_t, double velocity)
     if (program == PERC_SNARE) {
         snare_destroy(snares + index);
         snare_init(snares + index, velocity);
+    }
+    else if (program == PERC_HIHAT) {
+        hihat_init(hihats + index, velocity);
     }
 }
 
@@ -117,9 +121,7 @@ static int paPercCallback(
                 v += snare_step(snares + j, t_on);
             }
             else if (program == PERC_HIHAT) {
-                if (t_on < 1) {
-                    v += frand() * t_on * fexp(-60 * t_on) * 14 * perc_velocities[j];
-                }
+                v += hihat_step(hihats + j, t_on);
             }
             out_v += v;
         }

@@ -9,6 +9,12 @@ typedef struct snare_state
     buffer_state buffer;
 } snare_state;
 
+typedef struct hihat_state
+{
+    double velocity;
+    polezero_state polezero;
+} hihat_state;
+
 void snare_preinit(snare_state *s)
 {
     pingsum_preinit(&s->pingsum);
@@ -58,4 +64,22 @@ double snare_step(snare_state *s, double on_t)
     noise = polezero_step(&s->polezero, noise + 0.4 * buffer_delay(s->buffer, s->buffer.num_samples));
     buffer_step(&s->buffer, noise);
     return (drum + noise) * s->velocity;
+}
+
+void hihat_init(hihat_state *h, double velocity)
+{
+    h->velocity = velocity;
+    polezero_reset(&h->polezero);
+    polezero_integrator(&h->polezero, 1000, 0.87);
+}
+
+double hihat_step(hihat_state *h, double on_t)
+{
+        double t = on_t;
+        double f = 520.0;
+        double v;
+        v = triangle(t * f + (0.4 + 0.1 * h->velocity) * exp(-t * 5) * triangle(t * f * 6.61)) + 0.2;
+        v = polezero_step(&h->polezero, frand()) * v + 0.01 * v;
+        v *= exp(-15 * t) * 5 * h->velocity;
+        return v;
 }
