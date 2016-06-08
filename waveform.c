@@ -138,6 +138,65 @@ double triangle(double phase)
     return 4 * fabs(phase - floor(phase) - 0.5) - 1;
 }
 
+double parangle(double phase, double b)
+{
+    double x = phase - 0.5 * floor(2 * phase) - 0.25;
+    x *= 16 * x;
+    if (phase - floor(phase) < 0.5) {
+        return x - 1;
+    }
+    return 1 - x;
+}
+
+double tooth(double phase)
+{
+    phase = tan(M_PI * phase);
+    return tanh(phase * phase) * 2 -1;
+}
+
+double tri(double phase)
+{
+    phase -= floor(phase + 0.5);
+    return tanh(tan(2 * M_PI * fabs(phase) - 0.5 * M_PI));
+}
+
+double cosineh(double phase, double sharpness)
+{
+    if (sharpness < EPSILON) {
+        return 0.5 + 0.5 * cosine(phase);
+    }
+    else if (sharpness < 0.99) {
+        double a = sharpness / (1 - sharpness);
+        return (cosh(a * cosine(0.5 * phase)) - 1) / (cosh(a) - 1);
+    }
+    else if (sharpness < 1) {
+        phase -= floor(phase + 0.5);
+        double a = -0.5 * M_PI * M_PI * sharpness / (1 - sharpness);
+        return fexp(a * phase * phase);
+    }
+    else {
+        return 0.0;
+    }
+}
+
+double _formant(double phase, int ratio, double width)
+{
+    if (width < 700) {
+        return cosh(cosine(0.5 * phase) * width) / cosh(width) * cosine(phase * ratio);
+    }
+    else {
+        phase -= floor(phase + 0.5);
+        return fexp(-0.5 * M_PI * M_PI * width * phase * phase) * cosine(phase * ratio);
+    }
+}
+
+double formant(double phase, double ratio, double width)
+{
+    int floor_ratio = floor(ratio);
+    double f0 = _formant(phase, floor_ratio, width);
+    return f0 + (ratio - floor_ratio) * (_formant(phase, floor_ratio + 1, width) - f0);
+}
+
 #ifndef MAIN
 int main()
 {

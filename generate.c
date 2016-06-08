@@ -9,7 +9,7 @@
 
 #define SAMPLE_RATE (44100)
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
-#define NUM_SAMPLES (SAMPLE_RATE * 1)
+#define NUM_SAMPLES (SAMPLE_RATE * 6)
 
 #include "noise.c"
 #include "blit.c"
@@ -25,20 +25,22 @@ int main()
     waveform_init();
     float *samples = calloc(NUM_SAMPLES, sizeof(float));
 
-    polezero_state polezero;
-    polezero_reset(&polezero);
-    polezero_integrator(&polezero, 1000, 0.95);
+    blit_state blit;
+    blit.phase = 0;
+    blit.freq = 220.0;
+
+    filter_state filter;
+    filter_reset(&filter);
 
     double max_amplitude = 0;
     for (int i = 0; i < NUM_SAMPLES; i++) {
         double t = i * SAMPDELTA;
 
-        double f = 500.0;
-        double v;
-        v = triangle(t * f + 0.5 * exp(-t * 4) * triangle(t * f * 5.71)) + 0.1;
-        v = polezero_step(&polezero, frand()) * v + 0.01 * v;
-        v *= exp(-15 * t) * 3;
-        samples[i] = v;
+        // filter_bpf(&filter, 220.0 + 200 * t, 50);
+        // double v = filter_step(&filter, sineblit_step(&blit, 1));
+        // samples[i] = v * 0.005;
+
+        samples[i] = formant(t * 200.0 + 0.3 * sine(700.41 * t), t * 3, 0.5) * 0.5;
 
         if (i < 20) {
             printf("%g\n", samples[i]);
