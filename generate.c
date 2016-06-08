@@ -40,7 +40,7 @@ int main()
         // double v = filter_step(&filter, sineblit_step(&blit, 1));
         // samples[i] = v * 0.005;
 
-        samples[i] = formant(t * 200.0 + 0.3 * sine(700.41 * t), t * 3, 0.5) * 0.5;
+        samples[i] = formant(t * 220.0, t * 3, 0.5) * 0.5;
 
         if (i < 20) {
             printf("%g\n", samples[i]);

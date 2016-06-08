@@ -7,17 +7,35 @@
 #endif
 
 #define TABLE_SIZE (4096)
+#define TABLE_SIZE_4 (1024)
+#define TABLE_SIZE_16 (256)
 
-static double SINE_TABLE[TABLE_SIZE + 1];
-static double EXP_TABLE[TABLE_SIZE + 1];
-static double ERF_TABLE[TABLE_SIZE + 1];
+static double SINE_TABLE[2 * TABLE_SIZE];
+static double ERF_TABLE[2 * TABLE_SIZE];
+static double EXP_TABLE[2 * TABLE_SIZE];
 void waveform_init()
 {
-    for(int i = 0; i < TABLE_SIZE + 1; i++) {
-        double x = i / ((double) TABLE_SIZE);
-        SINE_TABLE[i] = sin(2 * M_PI * x);
-        ERF_TABLE[i] = erf(4 * x);
-        EXP_TABLE[i] = exp(-16 * x);
+    for(int i = 0; i < TABLE_SIZE; i++) {
+        // Solve for table constants:
+        // target((i+0) / size) = table_0[i] + (i+0) * table_1[i]
+        // target((i+1) / size) = table_0[i] + (i+1) * table_1[i]
+        double x0 = i / ((double) TABLE_SIZE);
+        double x1 = (i + 1) / ((double) TABLE_SIZE);
+        double target_0 = sin(2 * M_PI * x0);
+        double target_1 = sin(2 * M_PI * x1);
+        // Use a single table for better cache behavior.
+        SINE_TABLE[2*i + 0] = target_0 + i * (target_0 - target_1);
+        SINE_TABLE[2*i + 1] = target_1 - target_0;
+
+        target_0 = erf(4 * x0);
+        target_1 = erf(4 * x1);
+        ERF_TABLE[2*i + 0] = target_0 + i * (target_0 - target_1);
+        ERF_TABLE[2*i + 1] = target_1 - target_0;
+
+        target_0 = exp(-16 * x0);
+        target_1 = exp(-16 * x1);
+        EXP_TABLE[2*i + 0] = target_0 + i * (target_0 - target_1);
+        EXP_TABLE[2*i + 1] = target_1 - target_0;
     }
 }
 
@@ -26,9 +44,8 @@ double sine(double phase)
     phase -= floor(phase);
     phase *= TABLE_SIZE;
     int index = (int) phase;
-    double mu = phase - index;
-    phase = SINE_TABLE[index];
-    return phase + mu * (SINE_TABLE[index + 1] - phase);
+    index += index;
+    return SINE_TABLE[index] + phase * SINE_TABLE[index + 1];
 }
 
 double cosine(double phase)
@@ -38,14 +55,13 @@ double cosine(double phase)
 
 double _ferf(double x)
 {
-    x *= 0.25 * TABLE_SIZE;
+    x *= TABLE_SIZE_4;
     int index = (int) x;
     if (index >= TABLE_SIZE) {
         return 1;
     }
-    double mu = x - index;
-    x = ERF_TABLE[index];
-    return x + mu * (ERF_TABLE[index + 1] - x);
+    index += index;
+    return ERF_TABLE[index] + x * ERF_TABLE[index + 1];
 }
 
 double ferf(double x)
@@ -61,14 +77,13 @@ double fexp(double x)
     if (x > 0) {
         return exp(x);
     }
-    x *= -0.0625 * TABLE_SIZE;
+    x *= -TABLE_SIZE_16;
     int index = (int) x;
     if (index >= TABLE_SIZE) {
         return 0;
     }
-    double mu = x - index;
-    x = EXP_TABLE[index];
-    return x + mu * (EXP_TABLE[index + 1] - x);
+    index += index;
+    return EXP_TABLE[index] + x * EXP_TABLE[index + 1];
 }
 
 double softsaw(double phase, double sharpness)
@@ -192,18 +207,49 @@ double _formant(double phase, int ratio, double width)
 
 double formant(double phase, double ratio, double width)
 {
-    int floor_ratio = floor(ratio);
-    double f0 = _formant(phase, floor_ratio, width);
-    return f0 + (ratio - floor_ratio) * (_formant(phase, floor_ratio + 1, width) - f0);
+    double floor_ratio = floor(ratio);
+    double am = cosine(phase * floor_ratio);
+    am += (ratio - floor_ratio) * (cosine(phase * (floor_ratio + 1)) - am);
+    if (width < 700) {
+        return cosh(cosine(0.5 * phase) * width) / cosh(width) * am;
+    }
+    else {
+        phase -= floor(phase + 0.5);
+        return fexp(-0.5 * M_PI * M_PI * width * phase * phase) * am;
+    }
 }
 
 #ifndef MAIN
 int main()
 {
     waveform_init();
+
+    double sine_error = 0;
+    double erf_error = 0;
+    double exp_error = 0;
+    double e;
+    for (double x = 0; x < 1; x += 1e-7) {
+        e = fabs(sin(2 * M_PI * x) - sine(x));
+        if (e > sine_error) {
+            sine_error = e;
+        }
+        e = fabs(erf(10 * x - 5) - ferf(10 * x - 5));
+        if (e > erf_error) {
+            erf_error = e;
+        }
+        e = fabs(exp(-20 * x) - fexp(-20 * x));
+        if (e > exp_error) {
+            exp_error = e;
+        }
+    }
+    printf("Sine error %g\n", sine_error);
+    printf("Erf error %g\n", erf_error);
+    printf("Exp error %g\n", exp_error);
+    return 0;
+
     double x = 5.3;
-    for (size_t i = 0; i < 100000000; i++) {
-        x = cos(-x);
+    for (size_t i = 0; i < 1000000000; i++) {
+        x = sine(x);
     }
     printf("%g\n", x);
 }
