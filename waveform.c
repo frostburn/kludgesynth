@@ -92,6 +92,19 @@ double softsaw(double phase, double sharpness)
     return atan(sharpness * sine(phase) / (1.0 + sharpness * cosine(phase))) / asin(sharpness);
 }
 
+double softarc(double phase, double sharpness)
+{
+    if (sharpness < EPSILON) {
+        return cosine(phase);
+    }
+    else if (sharpness < 1) {
+        phase *= 0.5;
+        return (hypot((1 + sharpness) * cosine(phase), (1 - sharpness) * sine(phase)) - 1) / sharpness;
+    }
+    else {
+        return fabs(cosine(0.5 * phase)) * 2 - 1;
+    }
+}
 
 double lissajous12(double phase, double sharpness, double bias)
 {
@@ -173,6 +186,11 @@ double tri(double phase)
 {
     phase -= floor(phase + 0.5);
     return tanh(tan(2 * M_PI * fabs(phase) - 0.5 * M_PI));
+}
+
+double trih(double phase)
+{
+    return erf(atanh(4 * fabs(phase - floor(phase + 0.5)) - 1.0));
 }
 
 double cosineh(double phase, double sharpness)

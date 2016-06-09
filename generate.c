@@ -25,22 +25,19 @@ int main()
     waveform_init();
     float *samples = calloc(NUM_SAMPLES, sizeof(float));
 
-    blit_state blit;
-    blit.phase = 0;
-    blit.freq = 220.0;
-
-    filter_state filter;
-    filter_reset(&filter);
+    double phase = 0;
 
     double max_amplitude = 0;
     for (int i = 0; i < NUM_SAMPLES; i++) {
         double t = i * SAMPDELTA;
 
-        // filter_bpf(&filter, 220.0 + 200 * t, 50);
-        // double v = filter_step(&filter, sineblit_step(&blit, 1));
-        // samples[i] = v * 0.005;
+        double freq = 220.0 + sine(t * 2.5) * 10.0 + 100 * t;
+        phase += SAMPDELTA * freq;
+        double v = 0;
+        v += formant(phase, (1000 + 200 * sine(t)) / freq, 2);
+        v += formant(phase, (2000 - t * 100) / freq, 2);
 
-        samples[i] = formant(t * 220.0, t * 3, 0.5) * 0.5;
+        samples[i] = v * 0.4;
 
         if (i < 20) {
             printf("%g\n", samples[i]);

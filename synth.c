@@ -43,7 +43,7 @@
 
 #define NUM_VOICES (16)
 #define NUM_PROGRAMS (12)
-#define NUM_MONO_PROGRAMS (2)
+#define NUM_MONO_PROGRAMS (3)
 #define MAX_DECAY (5)
 
 typedef struct
@@ -85,6 +85,9 @@ static double mono_off_time = -A_LOT;
 
 static osc_state mono_osc;
 static voice_state mono_voice;
+double last_mono_freq = 0.0;
+double last_mono_param_a = 0.0;
+double last_mono_param_b = 0.0;
 
 static int mono_program = 0;
 
@@ -298,6 +301,14 @@ double process_mono(double t_on, double t_off, double rate, double param_a, doub
     else if (mono_program == 1) {
         mono_voice.velocity = velocity * 0.8;
         v = voice_step(&mono_voice, t, t_on, t_off, freq, param_a, param_b);
+    }
+    else if (mono_program == 2) {
+        last_mono_freq = freq = 0.97 * last_mono_freq + 0.03 * freq;
+        last_mono_param_a = param_a = 0.97 * last_mono_param_a + 0.03 * param_a;
+        last_mono_param_b = param_b = 0.97 * last_mono_param_b + 0.03 * param_b;
+        mono_osc.velocity = velocity;
+        v = formant_voice(mono_osc, freq, t, t_on, t_off, param_a, param_b);
+        osc_step(&mono_osc, freq);
     }
     return v;
 }
