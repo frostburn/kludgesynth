@@ -56,10 +56,10 @@ double cosine(double phase)
 double _ferf(double x)
 {
     x *= TABLE_SIZE_4;
-    int index = (int) x;
-    if (index >= TABLE_SIZE) {
+    if (x >= TABLE_SIZE) {
         return 1;
     }
+    int index = (int) x;
     index += index;
     return ERF_TABLE[index] + x * ERF_TABLE[index + 1];
 }
@@ -78,10 +78,10 @@ double fexp(double x)
         return exp(x);
     }
     x *= -TABLE_SIZE_16;
-    int index = (int) x;
-    if (index >= TABLE_SIZE) {
+    if (x >= TABLE_SIZE) {
         return 0;
     }
+    int index = (int) x;
     index += index;
     return EXP_TABLE[index] + x * EXP_TABLE[index + 1];
 }

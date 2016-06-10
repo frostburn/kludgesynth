@@ -82,6 +82,10 @@ static voice_state voices[NUM_VOICES];
 
 static double mono_on_time = -A_LOT;
 static double mono_off_time = -A_LOT;
+static double mono_a_on_time = -A_LOT;
+static double mono_a_off_time = -A_LOT;
+static double mono_b_on_time = -A_LOT;
+static double mono_b_off_time = -A_LOT;
 
 static osc_state mono_osc;
 static voice_state mono_voice;
@@ -259,6 +263,12 @@ void handle_mouse_release(int num, double event_t)
     if (num == 4) {
         mono_off_time = event_t;
     }
+    else if (num == 1) {
+        mono_a_off_time = event_t;
+    }
+    else if (num == 2) {
+        mono_b_off_time = event_t;
+    }
 }
 
 #define MAX_EVENTS (128)
@@ -283,13 +293,24 @@ void handle_mouse_click(int num, double event_t)
         mono_program = (mono_program + 1) % NUM_MONO_PROGRAMS;
         printf("Selecting mono program %d\n", mono_program);
     }
+    else if (num == 1) {
+        mono_a_on_time = event_t;
+        mono_a_off_time = A_LOT;
+    }
+    else if (num == 2) {
+        mono_b_on_time = event_t;
+        mono_b_off_time = A_LOT;
+    }
     else {
         printf("Clicked button %d at %g.\n", num, event_t);
     }
 }
 
+// TODO: Calculate envelopes here and make them continuous.
 double process_mono(double t_on, double t_off, double rate, double param_a, double param_b)
 {
+    double a_t_on = t - mono_a_on_time;
+    double a_t_off = t - mono_a_off_time;
     double v = 0;
     double velocity = 0.5 + 0.5 * ferf(-mouse_state.y * 0.03);
     double freq = mtof(mouse_state.x * 0.05 + 60) * rate;
@@ -307,7 +328,7 @@ double process_mono(double t_on, double t_off, double rate, double param_a, doub
         last_mono_param_a = param_a = 0.97 * last_mono_param_a + 0.03 * param_a;
         last_mono_param_b = param_b = 0.97 * last_mono_param_b + 0.03 * param_b;
         mono_osc.velocity = velocity;
-        v = formant_voice(mono_osc, freq, t, t_on, t_off, param_a, param_b);
+        v = formant_voice(mono_osc, freq, t, t_on, t_off, param_a, param_b, a_t_on, a_t_off);
         osc_step(&mono_osc, freq);
     }
     return v;
