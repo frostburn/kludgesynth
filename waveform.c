@@ -190,7 +190,8 @@ double tri(double phase)
 
 double trih(double phase)
 {
-    return erf(atanh(4 * fabs(phase - floor(phase + 0.5)) - 1.0));
+    phase -= floor(phase + 0.5);
+    return erf(atanh(4 * fabs(phase) - 1.0));
 }
 
 double cosineh(double phase, double sharpness)

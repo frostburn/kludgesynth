@@ -47,9 +47,11 @@ void handle_mouse_event(const mouse_event e)
     if (e.type == MOUSE_MOVE) {
         if (e.sub_type == HORIZONTAL) {
             mouse_state.x += e.amount;
+            handle_mouse_delta_x(e.amount);
         }
         if (e.sub_type == VERTICAL) {
             mouse_state.y += e.amount;
+            handle_mouse_delta_y(e.amount);
         }
         if (e.sub_type == WHEEL) {
             mouse_state.wheel += e.amount;

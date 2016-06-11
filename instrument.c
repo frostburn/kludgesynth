@@ -111,22 +111,17 @@ void voice_init(voice_state *voice)
     }
 }
 
-double voice_step(voice_state *voice, double t, double t_on, double t_off, double rate, double formant_a, double formant_b)
+double voice_step(voice_state *voice, double rate, double env, double formant_a, double formant_b, double mod_a, double mod_b)
 {
-    if (t_off > 0.1) {
-        return 0;
-    }
-    if (t_off < 0) {
-        t_off = 0;
-    }
     double normalizer = voice->blit.freq * rate * SAMPDELTA;
     filter_lpf(voice->filters + 0, 400, 10000);
     filter_bpf(voice->filters + 1, 400 + 400 * formant_a, 300);
     filter_bpf(voice->filters + 2, 1100 + 900 * formant_b, 400);
-    double v = sineblit_step(&voice->blit, rate) * normalizer;
+    double v = sineblit_step(&voice->blit, rate) * normalizer + 0.05 * frand() * mod_a;
     v = filter_step(voice->filters + 0, v);
     v = filter_step(voice->filters + 1, v) * (2.5 - 0.9 * formant_a) + filter_step(voice->filters + 2, v) * (2.2 - 1.5 * formant_b);
-    return ferf(v * 2.5 * voice->velocity * ferf(50 * t_on) * fexp(-50 * t_off));
+    double velocity = voice->velocity * env;
+    return ferf(v * 2.5 * velocity) + tanh(v * 10) * mod_b * 0.2 * velocity;
 }
 
 void pipe_init(pipe_state *p, double freq)

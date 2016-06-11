@@ -60,26 +60,23 @@ double softsaw_bass(const osc_state osc, double t, double t_on, double t_off, do
     return v;
 }
 
-double fm_meow(const osc_state osc, double t, double t_on, double t_off, double param_a, double param_b)
+double fm_meow(const osc_state osc, double param_a, double param_b, double mod_a, double mod_b)
 {
     double v = qui(osc.phase);
+    v -= 2 * qua(osc.phase) * mod_b;
     v = qui(
         2 * osc.phase +
-        qui(osc.phase + v * 0.07) * param_a * 0.3 +
+        qui(osc.phase + v * (0.07 + 0.13 * mod_a)) * param_a * 0.3 +
         v * (0.1 + param_b * 0.2)
-    ) * (1 - 0.2 * param_a - 0.1 * param_b) * osc.velocity * tanh(100 * t_on);
-    if (t_off >= 0) {
-        v *= exp(-t_off * 100);
-    }
-    return v;
+    ) * (1 - 0.2 * param_a - 0.1 * param_b);
+    return v * 0.5 * osc.velocity;
 }
 
-double formant_voice(const osc_state osc, double rate, double t, double t_on, double t_off, double param_a, double param_b, double a_t_on, double a_t_off)
+double formant_voice(const osc_state osc, double t, double rate, double param_a, double param_b, double mod_a, double mod_b)
 {
-    double mod_a = ferf(20 * a_t_on);
-    if (a_t_off >= 0) {
-        mod_a *= fexp(-a_t_off * 40);
-    }
+    param_a -= mod_b * 0.9 * param_a;
+    param_b -= mod_b * 0.9 * param_b;
+    mod_b = 1.0 - mod_b * 0.8;
 
     param_a += mod_a * (-0.1 - 0.95 * param_a);
     param_b += mod_a * (0.4 - 0.8 * param_b);
@@ -91,14 +88,11 @@ double formant_voice(const osc_state osc, double rate, double t, double t_on, do
     param_b -= param_a * 0.1;
     width *= (1 + 0.1 * param_a + 0.1 * param_b);
     width *= (1 + mod_a);
-    v += formant(osc.phase * 1.000, 0.8, 4000 * width) * (0.2 + 0.1 * ifreq) * (0.4 * param_a + 0.5 * param_b);
-    v += formant(osc.phase * 1.000, (450 +  500 * param_a) * ifreq, (1800 + 5000 * param_a + 800 * param_b) * width) * 2 * (1 + 0.7 * param_a - 0.2 * param_b);
-    v += formant(osc.phase * 1.001, (900 +  100 * param_a + 900 * param_b) * ifreq, (1800 + 2000 * param_a - 100 * param_b) * width) * (0.4 + 1.2 * param_b - 0.1 * param_a);
-    v += formant(osc.phase * 0.999, (3000 - 200 * param_a - 500 * param_b + 700 * mod_a) * ifreq, (6000 + 3000 * param_a - 200 * param_b + 4000 * mod_a) * width) * 0.2 * (1 + 0.5 * param_b - 0.7 * param_a - 0.4 * mod_a);
-    v += formant(osc.phase * 1.000, (3500 - 100 * param_a + 100 * param_b) * ifreq, (7000 - 200 * param_b + 200 * mod_a) * width) * 0.07;
-    v *= ferf(100 * t_on) * (1 - 0.1 * param_a - 0.1 * param_b) * (0.9 + 0.1 * sine(t * 6.11 + 0.1 * cosine(t * 0.41)));
-    if (t_off >= 0) {
-        v *= fexp(-t_off * 100);
-    }
+    v += formant(osc.phase * 1.000, 0.8, 4000 * width) * (0.2 + 0.1 * ifreq) * (0.4 * param_a + 0.5 * param_b + 3 * (1 - mod_b));
+    v += formant(osc.phase * 1.000, (450 +  500 * param_a) * ifreq, (1800 + 5000 * param_a + 800 * param_b) * width) * 2 * (1 + 0.7 * param_a - 0.2 * param_b) * mod_b;
+    v += formant(osc.phase * 1.001, (900 +  100 * param_a + 900 * param_b) * ifreq, (1800 + 2000 * param_a - 100 * param_b) * width) * (0.4 + 1.2 * param_b - 0.1 * param_a) * mod_b;
+    v += formant(osc.phase * 0.999, (3000 - 200 * param_a - 500 * param_b + 700 * mod_a) * ifreq, (6000 + 3000 * param_a - 200 * param_b + 4000 * mod_a) * width) * 0.2 * (1 + 0.5 * param_b - 0.7 * param_a - 0.4 * mod_a) * mod_b;
+    v += formant(osc.phase * 1.000, (3500 - 100 * param_a + 100 * param_b) * ifreq, (7000 - 200 * param_b + 200 * mod_a) * width) * 0.07 * mod_b;
+    v *= (1 - 0.1 * param_a - 0.2 * param_b) * (0.9 + 0.1 * sine(t * 6.11 + 0.1 * cosine(t * 0.41)));
     return v * osc.velocity * 0.15;
 }

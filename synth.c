@@ -9,7 +9,7 @@
 #include <math.h>
 #include <portaudio.h>
 
-// Compile with: gcc synth.c -pthread -lm -lportaudio -O3 -o synth
+// Compile with: gcc synth.c -Wall -pthread -lm -lportaudio -O3 -o synth
 // Injection is best xD
 #define MAIN
 // #define DEV_NONBLOCK
@@ -23,6 +23,7 @@
 #include "clock_fit.c"
 #include "waveform.c"
 #include "interpolation.c"
+#include "envelope.c"
 
 #define SAMPLE_RATE (44100)
 #define SAMPDELTA (1.0 / (double) SAMPLE_RATE)
@@ -87,9 +88,15 @@ static double mono_a_off_time = -A_LOT;
 static double mono_b_on_time = -A_LOT;
 static double mono_b_off_time = -A_LOT;
 
+static envelope_state mono_env;
+static envelope_state mono_mod_a;
+static envelope_state mono_mod_b;
+
 static osc_state mono_osc;
 static voice_state mono_voice;
-double last_mono_freq = 0.0;
+double mono_velocity = 0.0;
+double last_mono_pitch = 0.0;
+double last_mono_velocity = 0.0;
 double last_mono_param_a = 0.0;
 double last_mono_param_b = 0.0;
 
@@ -128,6 +135,10 @@ void init_voices()
 
         voice_init(voices + i);
     }
+    envelope_init(&mono_env, 0.03, 0, 1, 0.01, 0.2);
+    envelope_init(&mono_mod_a, 0.04, 0, 1, 0.02, 0.2);
+    envelope_init(&mono_mod_b, 0.04, 0, 1, 0.04, 0.2);
+
     mono_osc.phase = 0;
     mono_osc.freq = 1;
     mono_osc.velocity = 0.5;
@@ -271,6 +282,20 @@ void handle_mouse_release(int num, double event_t)
     }
 }
 
+void handle_mouse_delta_x(double delta)
+{
+    return;
+}
+
+void handle_mouse_delta_y(double delta)
+{
+    mono_velocity -= 0.03 * delta;
+    if (mono_velocity < 0) {
+        mono_velocity = 0;
+    }
+    mono_velocity = ferf(mono_velocity);
+}
+
 #define MAX_EVENTS (128)
 #include "handle_joy.c"
 #include "handle_midi.c"
@@ -307,28 +332,31 @@ void handle_mouse_click(int num, double event_t)
 }
 
 // TODO: Calculate envelopes here and make them continuous.
-double process_mono(double t_on, double t_off, double rate, double param_a, double param_b)
+double process_mono(double rate, double param_a, double param_b)
 {
-    double a_t_on = t - mono_a_on_time;
-    double a_t_off = t - mono_a_off_time;
+    double env = erf_env_step(&mono_env, t, mono_on_time, mono_off_time);
+    double mod_a = erf_env_step(&mono_mod_a, t, mono_a_on_time, mono_a_off_time);
+    double mod_b = erf_env_step(&mono_mod_b, t, mono_b_on_time, mono_b_off_time);
     double v = 0;
-    double velocity = 0.5 + 0.5 * ferf(-mouse_state.y * 0.03);
-    double freq = mtof(mouse_state.x * 0.05 + 60) * rate;
+    double velocity = mono_velocity;
+    last_mono_velocity = velocity = 0.96 * last_mono_velocity + 0.04 * velocity;
+    double mono_pitch = mouse_state.x * 0.05 + 60;
+    last_mono_pitch = mono_pitch = 0.94 * last_mono_pitch + 0.06 * mono_pitch;
+    double freq = mtof(mono_pitch) * rate;
     if (mono_program == 0) {
         mono_osc.velocity = velocity;
-        v = fm_meow(mono_osc, t, t_on, t_off, param_a, param_b);
+        v = fm_meow(mono_osc, param_a, param_b, mod_a, mod_b) * env;
         osc_step(&mono_osc, freq);
     }
     else if (mono_program == 1) {
         mono_voice.velocity = velocity * 0.8;
-        v = voice_step(&mono_voice, t, t_on, t_off, freq, param_a, param_b);
+        v = voice_step(&mono_voice, freq, env, param_a, param_b, mod_a, mod_b);
     }
     else if (mono_program == 2) {
-        last_mono_freq = freq = 0.97 * last_mono_freq + 0.03 * freq;
         last_mono_param_a = param_a = 0.97 * last_mono_param_a + 0.03 * param_a;
         last_mono_param_b = param_b = 0.97 * last_mono_param_b + 0.03 * param_b;
         mono_osc.velocity = velocity;
-        v = formant_voice(mono_osc, freq, t, t_on, t_off, param_a, param_b, a_t_on, a_t_off);
+        v = formant_voice(mono_osc, t, freq, param_a, param_b, mod_a, mod_b) * env;
         osc_step(&mono_osc, freq);
     }
     return v;
@@ -435,14 +463,16 @@ static int paCallback(
                 v = pipe_step(pipes + j, rate, t_off);
             }
             else if (program == 12) {
-                v = voice_step(voices + j, t, t_on, t_off, rate, param_a, param_b);
+                // v = voice_step(voices + j, t, t_on, t_off, rate, param_a, param_b);
             }
             out_v += v;
         }
+
+        // TODO: Own thread for mono synth.
         double t_on = t - mono_on_time;
         double t_off = t - mono_off_time;
         if (t_off <= MAX_DECAY || t_on < 0) {
-            out_v += process_mono(t_on, t_off, rate, param_a, param_b);
+            out_v += process_mono(rate, param_a, param_b);
         }
 
         t += SAMPDELTA;
