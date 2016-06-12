@@ -44,7 +44,6 @@
 
 #define NUM_VOICES (16)
 #define NUM_PROGRAMS (12)
-#define NUM_MONO_PROGRAMS (3)
 #define MAX_DECAY (5)
 
 typedef struct
@@ -81,27 +80,6 @@ static blsaw_state blsaws[NUM_VOICES];
 static pipe_state pipes[NUM_VOICES];
 static voice_state voices[NUM_VOICES];
 
-static double mono_on_time = -A_LOT;
-static double mono_off_time = -A_LOT;
-static double mono_a_on_time = -A_LOT;
-static double mono_a_off_time = -A_LOT;
-static double mono_b_on_time = -A_LOT;
-static double mono_b_off_time = -A_LOT;
-
-static envelope_state mono_env;
-static envelope_state mono_mod_a;
-static envelope_state mono_mod_b;
-
-static osc_state mono_osc;
-static voice_state mono_voice;
-double mono_velocity = 0.0;
-double last_mono_pitch = 0.0;
-double last_mono_velocity = 0.0;
-double last_mono_param_a = 0.0;
-double last_mono_param_b = 0.0;
-
-static int mono_program = 0;
-
 void init_voices()
 {
     // TODO: Use preinits.
@@ -135,18 +113,6 @@ void init_voices()
 
         voice_init(voices + i);
     }
-    envelope_init(&mono_env, 0.03, 0, 1, 0.01, 0.2);
-    envelope_init(&mono_mod_a, 0.04, 0, 1, 0.02, 0.2);
-    envelope_init(&mono_mod_b, 0.04, 0, 1, 0.04, 0.2);
-
-    mono_osc.phase = 0;
-    mono_osc.freq = 1;
-    mono_osc.velocity = 0.5;
-    mono_osc.off_velocity = 0.5;
-
-    voice_init(&mono_voice);
-    mono_voice.blit.freq = 1;
-    mono_voice.velocity = 0.5;
 }
 
 int find_voice_index()
@@ -266,35 +232,7 @@ void handle_note_off(int index, double event_t, double velocity)
 }
 
 #include "synth_perc.c"
-
-void handle_mouse_click(int num, double event_t);
-
-void handle_mouse_release(int num, double event_t)
-{
-    if (num == 4) {
-        mono_off_time = event_t;
-    }
-    else if (num == 1) {
-        mono_a_off_time = event_t;
-    }
-    else if (num == 2) {
-        mono_b_off_time = event_t;
-    }
-}
-
-void handle_mouse_delta_x(double delta)
-{
-    return;
-}
-
-void handle_mouse_delta_y(double delta)
-{
-    mono_velocity -= 0.03 * delta;
-    if (mono_velocity < 0) {
-        mono_velocity = 0;
-    }
-    mono_velocity = ferf(mono_velocity);
-}
+#include "synth_mono.h"
 
 #define MAX_EVENTS (128)
 #include "handle_joy.c"
@@ -302,65 +240,7 @@ void handle_mouse_delta_y(double delta)
 #include "handle_mouse.c"
 #include "handle_kb.c"
 
-void handle_mouse_click(int num, double event_t)
-{
-    if (num == 6) {
-        mouse_state.x = 0;
-        mouse_state.y = 0;
-        mouse_state.wheel = 0;
-        printf("Mouse reset\n");
-    }
-    else if (num == 4) {
-        mono_on_time = event_t;
-        mono_off_time = A_LOT;
-    }
-    else if (num == 5) {
-        mono_program = (mono_program + 1) % NUM_MONO_PROGRAMS;
-        printf("Selecting mono program %d\n", mono_program);
-    }
-    else if (num == 1) {
-        mono_a_on_time = event_t;
-        mono_a_off_time = A_LOT;
-    }
-    else if (num == 2) {
-        mono_b_on_time = event_t;
-        mono_b_off_time = A_LOT;
-    }
-    else {
-        printf("Clicked button %d at %g.\n", num, event_t);
-    }
-}
-
-// TODO: Calculate envelopes here and make them continuous.
-double process_mono(double rate, double param_a, double param_b)
-{
-    double env = erf_env_step(&mono_env, t, mono_on_time, mono_off_time);
-    double mod_a = erf_env_step(&mono_mod_a, t, mono_a_on_time, mono_a_off_time);
-    double mod_b = erf_env_step(&mono_mod_b, t, mono_b_on_time, mono_b_off_time);
-    double v = 0;
-    double velocity = mono_velocity;
-    last_mono_velocity = velocity = 0.96 * last_mono_velocity + 0.04 * velocity;
-    double mono_pitch = mouse_state.x * 0.05 + 60;
-    last_mono_pitch = mono_pitch = 0.94 * last_mono_pitch + 0.06 * mono_pitch;
-    double freq = mtof(mono_pitch) * rate;
-    if (mono_program == 0) {
-        mono_osc.velocity = velocity;
-        v = fm_meow(mono_osc, param_a, param_b, mod_a, mod_b) * env;
-        osc_step(&mono_osc, freq);
-    }
-    else if (mono_program == 1) {
-        mono_voice.velocity = velocity * 0.8;
-        v = voice_step(&mono_voice, freq, env, param_a, param_b, mod_a, mod_b);
-    }
-    else if (mono_program == 2) {
-        last_mono_param_a = param_a = 0.97 * last_mono_param_a + 0.03 * param_a;
-        last_mono_param_b = param_b = 0.97 * last_mono_param_b + 0.03 * param_b;
-        mono_osc.velocity = velocity;
-        v = formant_voice(mono_osc, t, freq, param_a, param_b, mod_a, mod_b) * env;
-        osc_step(&mono_osc, freq);
-    }
-    return v;
-}
+#include "synth_mono.c"
 
 static int paCallback(
     const void *inputBuffer, void *outputBuffer,
@@ -468,13 +348,6 @@ static int paCallback(
             out_v += v;
         }
 
-        // TODO: Own thread for mono synth.
-        double t_on = t - mono_on_time;
-        double t_off = t - mono_off_time;
-        if (t_off <= MAX_DECAY || t_on < 0) {
-            out_v += process_mono(rate, param_a, param_b);
-        }
-
         t += SAMPDELTA;
 
         if (data->record_index < data->record_num_samples) {
@@ -499,6 +372,7 @@ int main(void)
     PaError err;
     paUserData data;
     paUserData perc_data;
+    paUserData mono_data;
 
     data.record_num_samples = RECORD_NUM_SAMPLES;
     data.record_index = 0;
@@ -506,6 +380,9 @@ int main(void)
 
     perc_data = data;
     perc_data.record_samples = calloc(perc_data.record_num_samples, sizeof(double));
+
+    mono_data = data;
+    mono_data.record_samples = calloc(mono_data.record_num_samples, sizeof(double));
 
     printf("PortAudio synth. SR = %d, BufSize = %d\n", SAMPLE_RATE, FRAMES_PER_BUFFER);
 
@@ -546,6 +423,18 @@ int main(void)
     );
     if(err != paNoError) goto error;
 
+    err = Pa_OpenStream(
+        &mono_stream,
+        NULL, /* no input */
+        &outputParameters,
+        SAMPLE_RATE,
+        FRAMES_PER_BUFFER,
+        paNoFlag,
+        paMonoCallback,
+        &mono_data
+    );
+    if(err != paNoError) goto error;
+
     sprintf(data.message, "No Message");
     err = Pa_SetStreamFinishedCallback(stream, &StreamFinished);
     if(err != paNoError) goto error;
@@ -553,6 +442,7 @@ int main(void)
     waveform_init();
     init_voices();
     init_percussion();
+    init_mono();
 
     if (open_joy(NULL)) {
         joy_description joy_desc;
@@ -600,6 +490,9 @@ int main(void)
     err = Pa_StartStream(perc_stream);
     if(err != paNoError) goto error;
 
+    err = Pa_StartStream(mono_stream);
+    if(err != paNoError) goto error;
+
     printf("Synth initialized!\n");
     printf("Press ENTER key to quit.\n");  
     getchar();
@@ -610,10 +503,16 @@ int main(void)
     err = Pa_StopStream(perc_stream);
     if(err != paNoError) goto error;
 
+    err = Pa_StopStream(mono_stream);
+    if(err != paNoError) goto error;
+
     err = Pa_CloseStream(stream);
     if(err != paNoError) goto error;
 
     err = Pa_CloseStream(perc_stream);
+    if(err != paNoError) goto error;
+
+    err = Pa_CloseStream(mono_stream);
     if(err != paNoError) goto error;
 
     Pa_Terminate();
@@ -630,6 +529,12 @@ int main(void)
     fclose(f);
 
     printf("Recorded %g seconds of audio.\n", data.record_index * SAMPDELTA);
+
+    f = fopen("dumps/mono_record.raw", "wb");
+    fwrite(mono_data.record_samples, sizeof(double), mono_data.record_index, f);
+    fclose(f);
+
+    printf("Recorded %g seconds of mono audio.\n", mono_data.record_index * SAMPDELTA);
 
     printf("K thx bye!\n");
 

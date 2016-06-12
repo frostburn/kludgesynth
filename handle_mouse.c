@@ -33,16 +33,16 @@ void handle_mouse_event(const mouse_event e)
         last_mouse_clock = e.clock;
         mouse_event_index = 0;
     }
-    double event_t = next_t - last_t + t;
+    double event_t = next_mono_t - last_mono_t + mono_t;
     event_t = get_event_time(
-        event_t, next_t, 2 * next_t - last_t,
+        event_t, next_mono_t, 2 * next_mono_t - last_mono_t,
         e.clock - last_mouse_clock,
         MAX_EVENTS, &mouse_event_index,
         mouse_event_times, mouse_event_clocks
     );
     #ifdef DEBUG
         print_mouse_event(e);
-        printf("%llu: %g, %g, %g -> %g\n", e.clock, last_t, t, next_t, event_t);
+        printf("%llu: %g, %g, %g -> %g\n", e.clock, last_mono_t, mono_t, next_mono_t, event_t);
     #endif
     if (e.type == MOUSE_MOVE) {
         if (e.sub_type == HORIZONTAL) {
