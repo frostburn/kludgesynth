@@ -11,6 +11,13 @@ typedef struct kp_state {
     int index;
 } kp_state;
 
+void kp_preinit(kp_state *kp)
+{
+    kp->num_samples = 0;
+    kp->samples = NULL;
+    kp->index = 0;
+}
+
 void kp_init(kp_state *kp, double freq)
 {
     kp->mu = 0;
@@ -43,9 +50,9 @@ double _kp_step(kp_state *kp)
 
 void kp_destroy(kp_state *kp)
 {
-    kp->num_samples = 0;
-    free(kp->samples);
-    kp->index = -1;
+    double *samples = kp->samples;
+    kp_preinit(kp);
+    free(samples);
 }
 
 double kp_step(kp_state *kp, double rate)

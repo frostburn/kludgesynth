@@ -82,7 +82,6 @@ static voice_state voices[NUM_VOICES];
 
 void init_voices()
 {
-    // TODO: Use preinits.
     for (int i = 0; i < NUM_VOICES; i++) {
         on_times[i] = -A_LOT;
         off_times[i] = -A_LOT;
@@ -93,23 +92,16 @@ void init_voices()
         oscs[i].velocity = 0;
         oscs[i].off_velocity = 0;
 
-        karps[i].num_samples = 0;
-        karps[i].samples = NULL;
+        kp_preinit(karps + i);
 
-        pingsums[i].num_voices = 0;
-        pingsums[i].pings = NULL;
+        pingsum_preinit(pingsums + i);
 
-        pads[i].snows = NULL;
-        pads[i].base_amplitudes = NULL;
-        pads[i].amplitudes = NULL;
-        pads[i].rates = NULL;
-        pads[i].coefs = NULL;
+        pad_preinit(pads + i);
 
         blsaw_init(blsaws + i, 20.0);
         blsaws[i].velocity = 0;
 
-        pipes[i].buffer.num_samples = 0;
-        pipes[i].buffer.samples = NULL;
+        pipe_preinit(pipes + i);
 
         voice_init(voices + i);
     }
@@ -260,8 +252,6 @@ static int paCallback(
 
     last_t = t;
     next_t = t + framesPerBuffer * SAMPDELTA;
-
-    // TODO: Fix a crash when iterating all programs.
 
     for (int i = 0; i < framesPerBuffer; i++) {
         // TODO: Support pitch bend per channel.

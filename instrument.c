@@ -35,6 +35,16 @@ typedef struct pipe_state
     buffer_state buffer;
 } pipe_state;
 
+void pad_preinit(pad_state *p)
+{
+    p->num_voices = 0;
+    p->snows = NULL;
+    p->base_amplitudes = NULL;
+    p->amplitudes = NULL;
+    p->rates = NULL;
+    p->coefs = NULL;
+}
+
 void pad_init(pad_state *p, int num_voices)
 {
     p->num_voices = num_voices;
@@ -55,11 +65,13 @@ void pad_init(pad_state *p, int num_voices)
 }
 
 void pad_destroy(pad_state *p) {
+    // TODO: preinit before free.
     free(p->snows);
     free(p->amplitudes);
     free(p->base_amplitudes);
     free(p->rates);
     free(p->coefs);
+    pad_preinit(p);
 }
 
 double pad_step_linear(pad_state *p, double rate, double sharpness)
@@ -122,6 +134,11 @@ double voice_step(voice_state *voice, double rate, double env, double formant_a,
     v = filter_step(voice->filters + 1, v) * (2.5 - 0.9 * formant_a) + filter_step(voice->filters + 2, v) * (2.2 - 1.5 * formant_b);
     double velocity = voice->velocity * env;
     return ferf(v * 2.5 * velocity) + tanh(v * 10) * mod_b * 0.2 * velocity;
+}
+
+void pipe_preinit(pipe_state *p)
+{
+    buffer_preinit(&p->buffer);
 }
 
 void pipe_init(pipe_state *p, double freq)
