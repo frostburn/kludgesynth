@@ -37,7 +37,8 @@ double _envelope_step(envelope_state *e, double v)
     return e->accum = v + e->mu * (e->accum - v);
 }
 
-double erf_env_step(envelope_state *e, double t, double on_time, double off_time) {
+double erf_env_step(envelope_state *e, double t, double on_time, double off_time)
+{
     double t_on = t - on_time;
     double t_off = t - off_time;
     double v = ferf(e->iattack * t_on);
@@ -50,4 +51,13 @@ double erf_env_step(envelope_state *e, double t, double on_time, double off_time
         v += fexp(-e->irelease * t_last_off);
     }
     return _envelope_step(e, v);
+}
+
+double erf_env_pure(double t_on, double t_off, double iattack, double irelease)
+{
+    double v = ferf(iattack * t_on);
+    if (t_off > 0) {
+        v *= fexp(-irelease * t_off);
+    }
+    return v;
 }

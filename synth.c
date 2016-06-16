@@ -3,13 +3,14 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <complex.h>
 #include <math.h>
 #include <portaudio.h>
 
-// Compile with: gcc synth.c -Wall -pthread -lm -lportaudio -O3 -o synth
+// Compile with: gcc synth.c -Wall -pthread -lm -lportaudio -O3 -o synth `pkg-config --cflags gtk+-3.0` `pkg-config --libs gtk+-3.0`
 // Injection is best xD
 #define MAIN
 // #define DEV_NONBLOCK
@@ -31,6 +32,9 @@
 
 #define RECORD_NUM_SAMPLES (SAMPLE_RATE * 60 * 10)
 
+#define NUM_UI_PARAMS (10)
+static double ui_params[NUM_UI_PARAMS] = {0};
+
 #include "filter.c"
 #include "waveguide.c"
 #include "osc.c"
@@ -43,7 +47,7 @@
 #include "percussion.c"
 
 #define NUM_VOICES (16)
-#define NUM_PROGRAMS (12)
+#define NUM_PROGRAMS (13)
 #define MAX_DECAY (5)
 
 typedef struct
@@ -78,7 +82,6 @@ static pingsum_state pingsums[NUM_VOICES];
 static pad_state pads[NUM_VOICES];
 static blsaw_state blsaws[NUM_VOICES];
 static pipe_state pipes[NUM_VOICES];
-static voice_state voices[NUM_VOICES];
 
 void init_voices()
 {
@@ -102,8 +105,6 @@ void init_voices()
         blsaws[i].velocity = 0;
 
         pipe_preinit(pipes + i);
-
-        voice_init(voices + i);
     }
 }
 
@@ -132,7 +133,7 @@ void handle_note_on(int index, int program, double event_t, double freq, double 
     off_times[index] = A_LOT;
     programs[index] = program;
 
-    if (program == 0 || program == 1 || program == 8) {
+    if (program == 0 || program == 1 || program == 8 || program == 12 || program == 13) {
         oscs[index].phase = 0;
         oscs[index].freq = freq;
         oscs[index].velocity = velocity;
@@ -196,10 +197,6 @@ void handle_note_on(int index, int program, double event_t, double freq, double 
         pipe_init(pipes + index, freq);
         pipes[index].velocity = velocity;
     }
-    if (program == 12) {
-        voices[index].blit.freq = freq;
-        voices[index].velocity = velocity;
-    }
 }
 
 void handle_note_off(int index, double event_t, double velocity)
@@ -211,7 +208,7 @@ void handle_note_off(int index, double event_t, double velocity)
     if (event_t < off_times[index]) {
         off_times[index] = event_t;
 
-        if (program == 0 || program == 1 || program == 8) {
+        if (program == 0 || program == 1 || program == 8 || program == 12 || program == 13) {
             oscs[index].off_velocity = velocity;
         }
         if (program == 2) {
@@ -333,7 +330,12 @@ static int paCallback(
                 v = pipe_step(pipes + j, rate, t_off);
             }
             else if (program == 12) {
-                // v = voice_step(voices + j, t, t_on, t_off, rate, param_a, param_b);
+                v = bassoon(oscs[j], t, t_on, t_off, param_a, param_b);
+                osc_step(oscs + j, rate);
+            }
+            else if (program == 13) {
+                v = flute(oscs[j], t, t_on, t_off);
+                osc_step(oscs + j, rate);
             }
             out_v += v;
         }
@@ -356,8 +358,16 @@ static void StreamFinished(void* userData)
     printf("Stream Completed: %s\n", data->message);
 }
 
-int main(void)
+#include "ui.c"
+
+int main(int arc, char *argv[])
 {
+    int heavy = 1;
+    for (int i = 1; i < arc; i++) {
+        if (strcmp(argv[i], "--light") == 0) {
+            heavy = 0;
+        }
+    }
     PaStreamParameters outputParameters;
     PaError err;
     paUserData data;
@@ -368,11 +378,13 @@ int main(void)
     data.record_index = 0;
     data.record_samples = calloc(data.record_num_samples, sizeof(double));
 
-    perc_data = data;
-    perc_data.record_samples = calloc(perc_data.record_num_samples, sizeof(double));
+    if (heavy) {
+        perc_data = data;
+        perc_data.record_samples = calloc(perc_data.record_num_samples, sizeof(double));
 
-    mono_data = data;
-    mono_data.record_samples = calloc(mono_data.record_num_samples, sizeof(double));
+        mono_data = data;
+        mono_data.record_samples = calloc(mono_data.record_num_samples, sizeof(double));
+    }
 
     printf("PortAudio synth. SR = %d, BufSize = %d\n", SAMPLE_RATE, FRAMES_PER_BUFFER);
 
@@ -401,29 +413,31 @@ int main(void)
     );
     if(err != paNoError) goto error;
 
-    err = Pa_OpenStream(
-        &perc_stream,
-        NULL, /* no input */
-        &outputParameters,
-        SAMPLE_RATE,
-        FRAMES_PER_BUFFER,
-        paNoFlag,
-        paPercCallback,
-        &perc_data
-    );
-    if(err != paNoError) goto error;
+    if (heavy) {
+        err = Pa_OpenStream(
+            &perc_stream,
+            NULL, /* no input */
+            &outputParameters,
+            SAMPLE_RATE,
+            FRAMES_PER_BUFFER,
+            paNoFlag,
+            paPercCallback,
+            &perc_data
+        );
+        if(err != paNoError) goto error;
 
-    err = Pa_OpenStream(
-        &mono_stream,
-        NULL, /* no input */
-        &outputParameters,
-        SAMPLE_RATE,
-        FRAMES_PER_BUFFER,
-        paNoFlag,
-        paMonoCallback,
-        &mono_data
-    );
-    if(err != paNoError) goto error;
+        err = Pa_OpenStream(
+            &mono_stream,
+            NULL, /* no input */
+            &outputParameters,
+            SAMPLE_RATE,
+            FRAMES_PER_BUFFER,
+            paNoFlag,
+            paMonoCallback,
+            &mono_data
+        );
+        if(err != paNoError) goto error;
+    }
 
     sprintf(data.message, "No Message");
     err = Pa_SetStreamFinishedCallback(stream, &StreamFinished);
@@ -477,33 +491,43 @@ int main(void)
     err = Pa_StartStream(stream);
     if(err != paNoError) goto error;
 
-    err = Pa_StartStream(perc_stream);
-    if(err != paNoError) goto error;
+    if (heavy) {
+        err = Pa_StartStream(perc_stream);
+        if(err != paNoError) goto error;
 
-    err = Pa_StartStream(mono_stream);
-    if(err != paNoError) goto error;
+        err = Pa_StartStream(mono_stream);
+        if(err != paNoError) goto error;
+    }
 
     printf("Synth initialized!\n");
-    printf("Press ENTER key to quit.\n");  
-    getchar();
+    #ifdef NO_UI
+        printf("Press ENTER key to quit.\n");
+        getchar();
+    #else
+        ui_main(0, NULL);
+    #endif
 
     err = Pa_StopStream(stream);
     if(err != paNoError) goto error;
 
-    err = Pa_StopStream(perc_stream);
-    if(err != paNoError) goto error;
+    if (heavy) {
+        err = Pa_StopStream(perc_stream);
+        if(err != paNoError) goto error;
 
-    err = Pa_StopStream(mono_stream);
-    if(err != paNoError) goto error;
+        err = Pa_StopStream(mono_stream);
+        if(err != paNoError) goto error;
+    }
 
     err = Pa_CloseStream(stream);
     if(err != paNoError) goto error;
 
-    err = Pa_CloseStream(perc_stream);
-    if(err != paNoError) goto error;
+    if (heavy) {
+        err = Pa_CloseStream(perc_stream);
+        if(err != paNoError) goto error;
 
-    err = Pa_CloseStream(mono_stream);
-    if(err != paNoError) goto error;
+        err = Pa_CloseStream(mono_stream);
+        if(err != paNoError) goto error;
+    }
 
     Pa_Terminate();
 
@@ -520,11 +544,13 @@ int main(void)
 
     printf("Recorded %g seconds of audio.\n", data.record_index * SAMPDELTA);
 
-    f = fopen("dumps/mono_record.raw", "wb");
-    fwrite(mono_data.record_samples, sizeof(double), mono_data.record_index, f);
-    fclose(f);
+    if (heavy) {
+        f = fopen("dumps/mono_record.raw", "wb");
+        fwrite(mono_data.record_samples, sizeof(double), mono_data.record_index, f);
+        fclose(f);
 
-    printf("Recorded %g seconds of mono audio.\n", mono_data.record_index * SAMPDELTA);
+        printf("Recorded %g seconds of mono audio.\n", mono_data.record_index * SAMPDELTA);
+    }
 
     printf("K thx bye!\n");
 

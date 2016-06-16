@@ -96,3 +96,22 @@ double formant_voice(const osc_state osc, double t, double rate, double param_a,
     v *= (1 - 0.1 * param_a - 0.2 * param_b) * (0.9 + 0.1 * sine(t * 6.11 + 0.1 * cosine(t * 0.41)));
     return v * osc.velocity * 0.15;
 }
+
+double bassoon(const osc_state osc, double t, double t_on, double t_off, double param_a, double param_b)
+{
+    double v = tooth(5 * osc.phase + (0.25 + osc.velocity * 0.1 + param_a * 0.4) * cub(osc.phase + t) + sine(2 * osc.phase) * param_b * 0.6);
+    return v * osc.velocity * erf_env_pure(t_on, t_off, 30, 40 + osc.off_velocity * 10) * 0.4;
+}
+
+double flute(const osc_state osc, double t, double t_on, double t_off)
+{
+    double phase = 0.5 * osc.phase;
+    double v = tri(phase) * sine(phase + t) + sine(t + ui_params[2]) * 0.5;
+    return v * osc.velocity * erf_env_pure(t_on, t_off, 50, 70);
+}
+
+double whatever(const osc_state osc, double t, double t_on, double t_off, double param_a, double param_b)
+{
+    double v = tri(osc.phase) * sine(osc.phase * ui_params[0] * 100 + t) + sine(t + ui_params[2]) * (2 * ui_params[1] - 1);
+    return v * osc.velocity * erf_env_pure(t_on, t_off, 50, 70);
+}
